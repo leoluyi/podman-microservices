@@ -1,4 +1,4 @@
-# Podman 微服務架構範例（方案 A：統一 SSL Termination）
+# Podman 微服務架構範例
 
 基於 Podman + Quadlet 的前後端分離微服務容器化部署方案，採用統一 SSL 終止點架構。
 
@@ -9,7 +9,7 @@
 外部 HTTPS :443 →  │  SSL Termination Proxy      │
                     │  (OpenResty)                │
                     │  - 統一 SSL 終止             │
-                    │  - 統一 JWT/API Key 驗證    │
+                    │  - 統一 JWT 驗證             │
                     │  - 路由分發                 │
                     └──────────┬──────────────────┘
                                │ (內部 HTTP)
@@ -31,7 +31,7 @@
 ## 核心特性
 
 - ✅ **統一 SSL 終止**：憑證只需掛載一處
-- ✅ **統一 Token 驗證**：JWT + API Key 集中驗證
+- ✅ **統一 JWT 驗證**：集中驗證 Web/App 和 Partner API
 - ✅ **完全網路隔離**：Backend APIs 在 internal-net
 - ✅ **內部 HTTP 通訊**：簡化配置，提升效能
 - ✅ **獨立更新部署**：每個服務獨立容器
@@ -122,16 +122,14 @@
 # 前端（不需驗證）
 curl -k https://localhost/
 
-# API（需要 JWT Token）
-# 先產生測試 Token
+# Web/App API（需要 JWT Token）
 TOKEN=$(./scripts/generate-jwt.sh test-user)
-
-# 使用 Token 訪問
 curl -k -H "Authorization: Bearer $TOKEN" \
      https://localhost/api/users
 
-# Partner API（使用 API Key）
-curl -k -H "X-API-Key: dev-key-12345678901234567890" \
+# Partner API（需要 JWT Token）
+PARTNER_TOKEN=$(./scripts/generate-jwt.sh partner-company-a)
+curl -k -H "Authorization: Bearer $PARTNER_TOKEN" \
      https://localhost/partner/api/order/
 ```
 
@@ -161,8 +159,7 @@ podman-microservices/
 │   │   ├── nginx.conf                 # 主配置（OpenResty + Lua）
 │   │   └── conf.d/
 │   │       ├── upstream.conf          # Backend 服務定義
-│   │       ├── routes.conf            # 路由 + Partner JWT 驗證
-│   │       └── api-keys.conf          # API Key 映射
+│   │       └── routes.conf            # 路由 + JWT 驗證（Web/App + Partner）
 │   └── frontend/                      # Frontend 配置
 │       └── nginx.conf                 # Frontend Nginx 配置
 │
@@ -207,8 +204,7 @@ podman-microservices/
 │   │   ├── nginx.conf
 │   │   └── conf.d/
 │   │       ├── upstream.conf
-│   │       ├── routes.conf
-│   │       └── api-keys.conf
+│   │       └── routes.conf
 │   ├── frontend/                      # Frontend 配置
 │   │   └── nginx.conf
 │   └── bff/                           # BFF 配置
@@ -290,14 +286,6 @@ curl -k -H "Authorization: Bearer $TOKEN" \
      https://localhost/partner/api/order/
 ```
 
-### 3. API Key（向下相容，可選）
-
-**範例：**
-```bash
-curl -k -H "X-API-Key: dev-key-12345678901234567890" \
-     https://localhost/partner/api/order/
-```
-
 **架構說明：** 詳見 `docs/ARCHITECTURE.md`  
 **JWT 使用指南：** 詳見 `docs/JWT-TOKEN-GUIDE.md`
 
@@ -368,7 +356,6 @@ podman exec -it api-order curl http://localhost:8080/health
 
 - [ ] 切換到 `prod` 模式
 - [ ] 更換預設 JWT Secret
-- [ ] 更換預設 API Keys
 - [ ] 使用正式 SSL 憑證（非自簽）
 - [ ] 設定 firewall 規則
 - [ ] 配置日誌輪轉
@@ -390,8 +377,8 @@ Environment=JWT_SECRET=your-super-secret-random-string-at-least-32-chars
 
 測試項目：
 - ✅ SSL Proxy 可訪問
-- ✅ JWT Token 驗證
-- ✅ API Key 驗證
+- ✅ Web/App JWT Token 驗證
+- ✅ Partner JWT Token 驗證
 - ✅ Backend APIs 完全隔離（生產模式）
 - ✅ 容器間通訊正常
 

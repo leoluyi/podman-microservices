@@ -62,17 +62,7 @@ done
 Environment=JWT_SECRET=<使用 openssl rand -base64 32 產生>
 ```
 
-### 3. 更新 API Keys
-
-編輯 `configs/ssl-proxy/conf.d/api-keys.conf`:
-
-```nginx
-map $http_x_api_key $api_client_name {
-    "YOUR_PRODUCTION_KEY" "partner-name";
-}
-```
-
-### 4. 使用正式 SSL 憑證（可選）
+### 3. 使用正式 SSL 憑證（可選）
 
 ```bash
 # 替換自簽憑證

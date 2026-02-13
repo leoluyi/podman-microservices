@@ -91,15 +91,30 @@ test_endpoint "API (無 Token，預期失敗)" "https://localhost/api/users" 401
 
 echo ""
 
-# 4. Partner API 測試
-info "=== Partner API (API Key) ==="
-test_endpoint "Partner Order API (有效 Key)" \
-    "https://localhost/partner/api/order/" 200 \
-    "-H 'X-API-Key: dev-key-12345678901234567890'"
+# 4. Partner API 測試（JWT Token）
+info "=== Partner API (JWT Token) ==="
 
-test_endpoint "Partner API (無效 Key，預期失敗)" \
-    "https://localhost/partner/api/order/" 401 \
-    "-H 'X-API-Key: invalid-key'"
+if [ -n "$TOKEN" ]; then
+    # 產生 Partner JWT Token
+    PARTNER_TOKEN=$(./scripts/generate-jwt.sh partner-company-a 2>/dev/null || echo "")
+
+    if [ -n "$PARTNER_TOKEN" ]; then
+        test_endpoint "Partner Order API (有效 JWT)" \
+            "https://localhost/partner/api/order/" 200 \
+            "-H 'Authorization: Bearer $PARTNER_TOKEN'"
+
+        test_endpoint "Partner Product API (有效 JWT)" \
+            "https://localhost/partner/api/product/" 200 \
+            "-H 'Authorization: Bearer $PARTNER_TOKEN'"
+    else
+        warn "無法產生 Partner Token，跳過 Partner JWT 測試"
+    fi
+else
+    warn "跳過 Partner API 測試（無法產生 Token）"
+fi
+
+test_endpoint "Partner API (無 Token，預期失敗)" \
+    "https://localhost/partner/api/order/" 401
 
 echo ""
 
