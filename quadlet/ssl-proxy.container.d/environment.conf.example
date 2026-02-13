@@ -2,16 +2,23 @@
 # ============================================================================
 # 開發環境：Partner JWT Secrets 配置
 # ============================================================================
+# ⚠️  WARNING: DEVELOPMENT/TESTING ONLY - DO NOT USE IN PRODUCTION
+# ⚠️  These secrets are PUBLIC and INSECURE - anyone can forge JWT tokens
+# ⚠️  Production must use: ./scripts/manage-partner-secrets.sh create
+# ============================================================================
 # 這些是固定的測試 Secret，方便開發和測試
-# 生產環境會使用 Podman Secrets 替代
+# 生產環境必須使用 Podman Secrets 管理，切勿使用以下值
 
 # Partner A - 完整權限（orders, products, users）
+# ⚠️ INSECURE - FOR DEVELOPMENT ONLY
 Environment=JWT_SECRET_PARTNER_A=dev-secret-partner-a-for-testing-only-32chars
 
 # Partner B - 僅訂單唯讀（orders:read）
+# ⚠️ INSECURE - FOR DEVELOPMENT ONLY
 Environment=JWT_SECRET_PARTNER_B=dev-secret-partner-b-for-testing-only-32chars
 
 # Partner C - 產品讀寫（products:read,write）
+# ⚠️ INSECURE - FOR DEVELOPMENT ONLY
 Environment=JWT_SECRET_PARTNER_C=dev-secret-partner-c-for-testing-only-32chars
 
 # ============================================================================
