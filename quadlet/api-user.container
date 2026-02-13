@@ -1,0 +1,120 @@
+[Unit]
+Description=User API Service (Internal Only)
+Documentation=https://github.com/your-org/api-user
+After=internal-net.service
+Requires=internal-net.service
+
+[Container]
+# ============================================================================
+# 鏡像配置
+# ============================================================================
+# 替換成你的實際鏡像位置
+# 範例：docker.io/your-registry/api-user:latest
+#       quay.io/your-org/api-user:v1.0.0
+Image=docker.io/library/nginx:alpine
+
+# 容器名稱（其他容器可透過此名稱訪問）
+ContainerName=api-user
+
+# ============================================================================
+# 網路配置
+# ============================================================================
+# 只連接內部隔離網路
+Network=internal-net
+
+# Debug 模式端口映射（由環境變數控制）
+# 生產環境：不設定此參數，完全隔離
+# 開發環境：透過 .container.d/environment.conf 設定
+PublishPort=${DEBUG_PORT_8081}
+
+# ============================================================================
+# 環境變數
+# ============================================================================
+Environment=SERVICE_NAME=api-user
+Environment=SERVICE_PORT=8081
+Environment=ENVIRONMENT=production
+
+# 資料庫連線（根據實際情況修改）
+Environment=DB_HOST=your-db-host.example.com
+Environment=DB_PORT=5432
+Environment=DB_NAME=userdb
+# Environment=DB_USER=apiuser
+# Environment=DB_PASSWORD=secure-password  # 建議使用 secrets
+
+# Java 應用程式設定（如適用）
+# Environment=JAVA_OPTS=-Xms256m -Xmx512m
+# Environment=SPRING_PROFILES_ACTIVE=production
+
+# ============================================================================
+# Volume 掛載（如需要）
+# ============================================================================
+# Volume=/opt/app/api-user/config:/app/config:ro
+# Volume=/opt/app/api-user/logs:/app/logs:rw
+
+# ============================================================================
+# 健康檢查
+# ============================================================================
+# 根據你的實際健康檢查端點修改
+HealthCmd=curl -f http://localhost:8081/health || exit 1
+HealthInterval=30s
+HealthTimeout=10s
+HealthRetries=3
+HealthStartPeriod=30s
+
+# ============================================================================
+# 重啟策略
+# ============================================================================
+Restart=always
+RestartSec=10
+
+# ============================================================================
+# 資源限制
+# ============================================================================
+# 記憶體限制
+Memory=512M
+MemorySwap=512M
+
+# CPU 限制（100% = 1 核心）
+CPUQuota=50%
+
+# ============================================================================
+# 日誌配置
+# ============================================================================
+LogDriver=journald
+
+# 可選：限制日誌大小
+# LogOpt=max-size=10m
+# LogOpt=max-file=3
+
+# ============================================================================
+# 安全設定
+# ============================================================================
+# 以非 root 使用者執行（推薦）
+# User=1000:1000
+
+# 唯讀根檔案系統（推薦，但需確保應用支援）
+# ReadOnly=true
+# Tmpfs=/tmp
+
+# 移除不必要的 capabilities
+# DropCapability=ALL
+# AddCapability=NET_BIND_SERVICE
+
+# ============================================================================
+# 標籤（metadata）
+# ============================================================================
+Label=app=microservices
+Label=service=api-user
+Label=tier=backend
+Label=public-access=false
+
+[Service]
+# systemd 服務設定
+TimeoutStartSec=120
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=10
+
+[Install]
+# 開機自動啟動
+WantedBy=multi-user.target default.target

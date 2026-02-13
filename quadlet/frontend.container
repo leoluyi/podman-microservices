@@ -1,0 +1,85 @@
+[Unit]
+Description=Frontend Service (React/Vue/Angular + Nginx)
+Documentation=https://github.com/your-org/frontend
+After=bff.service
+Wants=bff.service
+
+[Container]
+# ============================================================================
+# 鏡像配置
+# ============================================================================
+# 替換成你的前端鏡像（包含靜態檔案的 Nginx）
+Image=docker.io/library/nginx:alpine
+ContainerName=frontend
+
+# ============================================================================
+# 網路配置
+# ============================================================================
+# Frontend 不需要連接內部網路，只對外服務
+# Network=podman (預設使用 bridge 網路)
+
+# 對外暴露端口
+PublishPort=3000:80
+
+# ============================================================================
+# 環境變數
+# ============================================================================
+Environment=NGINX_HOST=localhost
+Environment=NGINX_PORT=80
+
+# API 端點配置（給前端使用）
+Environment=REACT_APP_BFF_URL=http://localhost:8080
+# 或
+# Environment=VUE_APP_API_URL=http://localhost:8080
+
+# ============================================================================
+# Volume 掛載
+# ============================================================================
+# 掛載前端靜態檔案
+# Volume=/opt/app/frontend/dist:/usr/share/nginx/html:ro
+
+# 掛載 Nginx 配置（如需自訂）
+# Volume=/opt/app/frontend/nginx.conf:/etc/nginx/nginx.conf:ro
+
+# ============================================================================
+# 健康檢查
+# ============================================================================
+HealthCmd=curl -f http://localhost/ || exit 1
+HealthInterval=30s
+HealthTimeout=10s
+HealthRetries=3
+HealthStartPeriod=10s
+
+# ============================================================================
+# 重啟策略
+# ============================================================================
+Restart=always
+RestartSec=10
+
+# ============================================================================
+# 資源限制
+# ============================================================================
+Memory=256M
+MemorySwap=256M
+CPUQuota=25%
+
+# ============================================================================
+# 日誌配置
+# ============================================================================
+LogDriver=journald
+
+# ============================================================================
+# 標籤
+# ============================================================================
+Label=app=microservices
+Label=service=frontend
+Label=tier=presentation
+
+[Service]
+TimeoutStartSec=60
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target default.target

@@ -1,0 +1,87 @@
+[Unit]
+Description=Product API Service (Exposed via Public Nginx)
+Documentation=https://github.com/your-org/api-product
+After=internal-net.service
+Requires=internal-net.service
+
+[Container]
+# ============================================================================
+# 鏡像配置
+# ============================================================================
+Image=docker.io/library/nginx:alpine
+ContainerName=api-product
+
+# ============================================================================
+# 網路配置
+# ============================================================================
+Network=internal-net
+
+# Debug 模式端口映射
+PublishPort=${DEBUG_PORT_8083}
+
+# ============================================================================
+# 環境變數
+# ============================================================================
+Environment=SERVICE_NAME=api-product
+Environment=SERVICE_PORT=8083
+Environment=ENVIRONMENT=production
+
+# 資料庫連線
+Environment=DB_HOST=your-db-host.example.com
+Environment=DB_PORT=5432
+Environment=DB_NAME=productdb
+
+# 快取設定（如適用）
+# Environment=MEMCACHED_HOST=memcached.example.com
+# Environment=MEMCACHED_PORT=11211
+
+# ============================================================================
+# Volume 掛載
+# ============================================================================
+# Volume=/opt/app/api-product/config:/app/config:ro
+# Volume=/opt/app/api-product/logs:/app/logs:rw
+
+# ============================================================================
+# 健康檢查
+# ============================================================================
+HealthCmd=curl -f http://localhost:8083/health || exit 1
+HealthInterval=30s
+HealthTimeout=10s
+HealthRetries=3
+HealthStartPeriod=30s
+
+# ============================================================================
+# 重啟策略
+# ============================================================================
+Restart=always
+RestartSec=10
+
+# ============================================================================
+# 資源限制
+# ============================================================================
+Memory=512M
+MemorySwap=512M
+CPUQuota=50%
+
+# ============================================================================
+# 日誌配置
+# ============================================================================
+LogDriver=journald
+
+# ============================================================================
+# 標籤
+# ============================================================================
+Label=app=microservices
+Label=service=api-product
+Label=tier=backend
+Label=public-access=true
+Label=nginx-backend=true
+
+[Service]
+TimeoutStartSec=120
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target default.target

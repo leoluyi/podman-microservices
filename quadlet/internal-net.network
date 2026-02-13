@@ -1,0 +1,22 @@
+[Network]
+# 內部隔離網路
+NetworkName=internal-net
+
+# 子網設定
+Subnet=10.89.0.0/24
+Gateway=10.89.0.1
+
+# 關鍵：完全隔離，不允許外部訪問
+# 此設定確保只有連接到此網路的容器可以互相通訊
+Internal=true
+
+# 啟用 DNS 讓容器可以透過名稱互相訪問
+DisableDNS=false
+
+# 標籤，方便識別和管理
+Label=app=microservices
+Label=tier=internal
+Label=environment=production
+
+[Install]
+WantedBy=default.target

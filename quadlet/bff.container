@@ -1,0 +1,89 @@
+[Unit]
+Description=BFF (Backend For Frontend) Gateway
+Documentation=https://github.com/your-org/bff-service
+After=internal-net.service api-user.service api-order.service api-product.service
+Requires=internal-net.service
+Wants=api-user.service api-order.service api-product.service
+
+[Container]
+# ============================================================================
+# 鏡像配置
+# ============================================================================
+# 替換成你的 BFF 服務鏡像
+Image=docker.io/library/nginx:alpine
+ContainerName=bff
+
+# ============================================================================
+# 網路配置
+# ============================================================================
+# 連接內部網路以訪問所有 Backend APIs
+Network=internal-net
+
+# 對外暴露端口（給 Web/App 使用）
+PublishPort=8080:8080
+
+# ============================================================================
+# 環境變數
+# ============================================================================
+Environment=SERVICE_NAME=bff
+Environment=SERVICE_PORT=8080
+Environment=ENVIRONMENT=production
+
+# Backend API 端點（透過容器名稱解析）
+Environment=API_USER_URL=http://api-user:8081
+Environment=API_ORDER_URL=http://api-order:8082
+Environment=API_PRODUCT_URL=http://api-product:8083
+
+# Session 設定（如適用）
+# Environment=SESSION_SECRET=change-this-secret
+# Environment=REDIS_URL=redis://redis:6379
+
+# ============================================================================
+# Volume 掛載
+# ============================================================================
+# Volume=/opt/app/bff/config:/app/config:ro
+# Volume=/opt/app/bff/logs:/app/logs:rw
+
+# ============================================================================
+# 健康檢查
+# ============================================================================
+HealthCmd=curl -f http://localhost:8080/health || exit 1
+HealthInterval=30s
+HealthTimeout=10s
+HealthRetries=3
+HealthStartPeriod=30s
+
+# ============================================================================
+# 重啟策略
+# ============================================================================
+Restart=always
+RestartSec=10
+
+# ============================================================================
+# 資源限制
+# ============================================================================
+Memory=512M
+MemorySwap=512M
+CPUQuota=50%
+
+# ============================================================================
+# 日誌配置
+# ============================================================================
+LogDriver=journald
+
+# ============================================================================
+# 標籤
+# ============================================================================
+Label=app=microservices
+Label=service=bff
+Label=tier=gateway
+Label=role=backend-for-frontend
+
+[Service]
+TimeoutStartSec=120
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target default.target

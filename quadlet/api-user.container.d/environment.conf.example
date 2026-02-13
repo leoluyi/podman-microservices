@@ -1,0 +1,23 @@
+# ============================================================================
+# Debug 模式環境變數覆蓋
+# ============================================================================
+# 此檔案用於開發/測試環境
+# 生產環境請刪除此檔案或重命名為 environment.conf.disabled
+#
+# 使用方式：
+# 1. 開發環境：將此檔案命名為 environment.conf
+# 2. 生產環境：刪除或重命名此檔案
+#
+# 套用變更後需執行：
+#   systemctl --user daemon-reload
+#   systemctl --user restart api-user.service
+# ============================================================================
+
+[Container]
+# 開啟 Debug 端口（只綁定 localhost）
+# 格式：127.0.0.1:HOST_PORT:CONTAINER_PORT
+Environment=DEBUG_PORT_8081=127.0.0.1:8081:8081
+
+# 可選：開發環境特定設定
+# Environment=LOG_LEVEL=debug
+# Environment=ENABLE_DEBUG_MODE=true
