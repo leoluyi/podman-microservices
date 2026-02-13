@@ -142,10 +142,7 @@ curl -k -H "Authorization: Bearer $PARTNER_TOKEN" \
 ```
 podman-microservices/
 ├── 📄 專案文件
-│   ├── README.md                      # 快速開始指南（本文件）
-│   ├── SUMMARY.md                     # 專案總結
-│   ├── CHECKLIST.md                   # 檢查清單
-│   └── FINAL-ASSESSMENT.md            # 架構評估總結
+│   └── README.md                      # 快速開始指南（本文件）
 │
 ├── 📁 quadlet/                        # Systemd Quadlet 服務定義
 │   ├── internal-net.network           # 內部隔離網路定義
@@ -192,49 +189,6 @@ podman-microservices/
     └── DEBUG.md                       # 故障排除
 ```
 
-**檔案統計：**
-- Markdown 文件：8 個
-- Quadlet 配置：7 個服務 + 1 個網路
-- Dockerfile：5 個（SUSE BCI）
-- Shell 腳本：9 個
-- Nginx 配置：5 個
-│   ├── api-user.container             # User API
-│   ├── api-order.container            # Order API
-│   ├── api-product.container          # Product API
-│   └── *.container.d/                 # Debug 環境變數
-├── configs/                           # 配置檔
-│   ├── images.env                     # 鏡像定義
-│   ├── ssl-proxy/                     # SSL Proxy 配置
-│   │   ├── nginx.conf
-│   │   └── conf.d/
-│   │       ├── upstream.conf
-│   │       └── routes.conf
-│   ├── frontend/                      # Frontend 配置
-│   │   └── nginx.conf
-│   └── bff/                           # BFF 配置
-├── dockerfiles/                       # Dockerfile（SUSE BCI）
-│   ├── api-user/
-│   ├── api-order/
-│   ├── api-product/
-│   ├── bff/
-│   └── frontend/
-├── scripts/                           # 管理腳本
-│   ├── setup.sh                       # 初始化
-│   ├── start-all.sh                   # 啟動所有服務
-│   ├── stop-all.sh                    # 停止所有服務
-│   ├── status.sh                      # 查看狀態
-│   ├── logs.sh                        # 查看日誌
-│   ├── test-connectivity.sh           # 連通性測試
-│   ├── generate-certs.sh              # 產生自簽憑證
-│   └── generate-jwt.sh                # 產生測試 JWT
-├── docs/                              # 文件
-│   ├── ARCHITECTURE.md                # 架構詳解
-│   ├── DEPLOYMENT.md                  # 部署指南
-│   ├── PARTNER-INTEGRATION.md         # Partner API 整合指南
-│   └── DEBUG.md                       # Debug 指南
-└── examples/                          # 範例程式
-    └── partner-clients/               # Partner 客戶端範例（Node.js, Python）
-```
 
 ## Token 驗證機制
 
@@ -289,8 +243,8 @@ curl -k -H "Authorization: Bearer $TOKEN" \
      https://localhost/partner/api/order/
 ```
 
-**架構說明：** 詳見 `docs/ARCHITECTURE.md`
-**Partner 整合指南：** 詳見 `docs/PARTNER-INTEGRATION.md`
+- **架構說明：** 詳見 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- **Partner 整合指南：** 詳見 [docs/PARTNER-INTEGRATION.md](docs/PARTNER-INTEGRATION.md)
 
 ## 建置容器鏡像
 
