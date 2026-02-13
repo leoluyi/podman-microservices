@@ -34,14 +34,29 @@ Volume=/opt/app/certs/server.key:/etc/nginx/ssl/server.key:ro
 Volume=/opt/app/configs/ssl-proxy/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
 Volume=/opt/app/configs/ssl-proxy/conf.d:/etc/nginx/conf.d:ro
 
+# 掛載 Lua 模組
+Volume=/opt/app/configs/ssl-proxy/lua:/usr/local/openresty/nginx/lua:ro
+
 # 日誌目錄
 Volume=/opt/app/logs/ssl-proxy:/var/log/nginx:rw
 
 # ============================================================================
-# 環境變數
+# Partner Secrets 配置（混合方案）
 # ============================================================================
-# JWT Secret（請更換成強隨機字串）
-Environment=JWT_SECRET=your-super-secret-key-change-me-in-production-at-least-32-chars
+# 生產環境：使用 Podman Secrets（優先）
+# 如果 Secret 存在，會注入為環境變數並覆蓋下方的 Environment
+Secret=jwt-secret-partner-a,type=env,target=JWT_SECRET_PARTNER_A
+Secret=jwt-secret-partner-b,type=env,target=JWT_SECRET_PARTNER_B
+Secret=jwt-secret-partner-c,type=env,target=JWT_SECRET_PARTNER_C
+
+# 開發環境：Fallback 環境變數（Secret 不存在時使用）
+# 這些會被 .container.d/environment.conf 覆蓋
+Environment=JWT_SECRET_PARTNER_A=dev-secret-partner-a-fallback-32chars
+Environment=JWT_SECRET_PARTNER_B=dev-secret-partner-b-fallback-32chars
+Environment=JWT_SECRET_PARTNER_C=dev-secret-partner-c-fallback-32chars
+
+# Debug 模式（開發環境可透過 .container.d 覆蓋）
+Environment=DEBUG_PARTNERS=false
 
 # Nginx 設定
 Environment=NGINX_WORKER_PROCESSES=auto

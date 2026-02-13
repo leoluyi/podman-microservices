@@ -72,7 +72,7 @@
 - 編號規則：81 + 服務編號（01, 02, 03）
 - 生產環境自動禁用
 
-**完整端口設計說明：** 詳見 `docs/PORT-PLANNING.md`
+**完整端口設計說明：** 詳見 `docs/ARCHITECTURE.md` 的「端口規劃」章節
 
 ## 快速開始
 
@@ -186,10 +186,10 @@ podman-microservices/
 │   └── generate-jwt.sh                # 產生測試 JWT Token
 │
 └── 📁 docs/                           # 詳細文件
-    ├── ARCHITECTURE.md                # 架構詳解（含端口規劃、Partner JWT）
+    ├── ARCHITECTURE.md                # 架構詳解（含端口規劃）
     ├── DEPLOYMENT.md                  # 部署指南
-    ├── DEBUG.md                       # 故障排除
-    └── JWT-TOKEN-GUIDE.md             # JWT Token 使用指南
+    ├── PARTNER-INTEGRATION.md         # Partner API 整合指南
+    └── DEBUG.md                       # 故障排除
 ```
 
 **檔案統計：**
@@ -230,11 +230,10 @@ podman-microservices/
 ├── docs/                              # 文件
 │   ├── ARCHITECTURE.md                # 架構詳解
 │   ├── DEPLOYMENT.md                  # 部署指南
-│   ├── DEBUG.md                       # Debug 指南
-│   └── JWT-TOKEN-GUIDE.md             # JWT Token 使用指南
+│   ├── PARTNER-INTEGRATION.md         # Partner API 整合指南
+│   └── DEBUG.md                       # Debug 指南
 └── examples/                          # 範例程式
-    ├── api-service/                   # 範例 API 服務
-    └── bff-service/                   # 範例 BFF 服務
+    └── partner-clients/               # Partner 客戶端範例（Node.js, Python）
 ```
 
 ## Token 驗證機制
@@ -290,8 +289,8 @@ curl -k -H "Authorization: Bearer $TOKEN" \
      https://localhost/partner/api/order/
 ```
 
-**架構說明：** 詳見 `docs/ARCHITECTURE.md`  
-**JWT 使用指南：** 詳見 `docs/JWT-TOKEN-GUIDE.md`
+**架構說明：** 詳見 `docs/ARCHITECTURE.md`
+**Partner 整合指南：** 詳見 `docs/PARTNER-INTEGRATION.md`
 
 ## 建置容器鏡像
 
@@ -359,18 +358,32 @@ podman exec -it api-order curl http://localhost:8080/health
 ### 生產環境檢查清單
 
 - [ ] 切換到 `prod` 模式
-- [ ] 更換預設 JWT Secret
+- [ ] 創建 Partner Podman Secrets（每個 Partner 獨立 Secret）
 - [ ] 使用正式 SSL 憑證（非自簽）
 - [ ] 設定 firewall 規則
 - [ ] 配置日誌輪轉
 - [ ] 設定監控告警
 
-### JWT Secret 設定
+### Partner JWT Secrets 管理
+
+**開發環境**：使用固定測試 Secret（由 `setup.sh dev` 自動配置）
+
+**生產環境**：使用 Podman Secrets
 
 ```bash
-# 在 ssl-proxy.container 中設定
-Environment=JWT_SECRET=your-super-secret-random-string-at-least-32-chars
+# 創建 Partner Secrets（每個 Partner 獨立）
+./scripts/manage-partner-secrets.sh create a
+./scripts/manage-partner-secrets.sh create b
+./scripts/manage-partner-secrets.sh create c
+
+# 查看現有 Secrets
+./scripts/manage-partner-secrets.sh list
+
+# 輪換 Secret（安全更新）
+./scripts/manage-partner-secrets.sh rotate a
 ```
+
+**詳細說明**：參考 [`docs/PARTNER-INTEGRATION.md`](docs/PARTNER-INTEGRATION.md)
 
 ## 網路隔離驗證
 
@@ -405,10 +418,18 @@ podman images | grep ssl-proxy
 
 ```bash
 # 檢查 JWT Secret 是否一致
-# 產生 Token 和驗證 Token 必須使用相同的 Secret
+# 產生 Token 和驗證 Token 必須使用相同的 Partner Secret
 
-# 查看 SSL Proxy 環境變數
-podman inspect ssl-proxy | grep JWT_SECRET
+# 開發環境：查看環境變數
+podman inspect ssl-proxy | grep JWT_SECRET_PARTNER
+
+# 生產環境：檢查 Podman Secrets
+./scripts/manage-partner-secrets.sh list
+./scripts/manage-partner-secrets.sh show a
+
+# 重新產生測試 Token
+TOKEN=$(./scripts/generate-jwt.sh partner-company-a)
+echo $TOKEN | cut -d. -f2 | base64 -d 2>/dev/null  # 解碼查看 payload
 ```
 
 完整 Debug 指南：`docs/DEBUG.md`
@@ -426,10 +447,9 @@ podman inspect ssl-proxy | grep JWT_SECRET
 ## 文件
 
 - [架構詳解](docs/ARCHITECTURE.md) - 完整架構說明
-- [端口規劃](docs/PORT-PLANNING.md) - 端口設計原則與完整配置
 - [部署指南](docs/DEPLOYMENT.md) - 詳細部署步驟
+- [Partner 整合指南](docs/PARTNER-INTEGRATION.md) - Partner API 設定與整合
 - [Debug 指南](docs/DEBUG.md) - 故障排除
-- [JWT Token 指南](docs/JWT-TOKEN-GUIDE.md) - JWT 使用說明
 
 ## 版本資訊
 

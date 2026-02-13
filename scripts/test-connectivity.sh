@@ -79,29 +79,61 @@ test_endpoint "API 可達性測試" "https://localhost/api/users" 401
 
 echo ""
 
-# 4. Partner API 測試（SSL Proxy 的 JWT 驗證）
-info "=== Partner API (JWT Token 驗證) ==="
+# 4. Partner API 測試（SSL Proxy 的 JWT 驗證 + 權限檢查）
+info "=== Partner API (JWT Token 驗證 + 權限) ==="
 
-# 產生 Partner JWT Token
 if [ -f "./scripts/generate-jwt.sh" ]; then
-    PARTNER_TOKEN=$(./scripts/generate-jwt.sh partner-company-a 2>/dev/null || echo "")
+    # 測試 Partner A（有完整權限）
+    info "測試 Partner A (完整權限)..."
+    PARTNER_A_TOKEN=$(./scripts/generate-jwt.sh partner-company-a 2>/dev/null || echo "")
 
-    if [ -n "$PARTNER_TOKEN" ]; then
-        test_endpoint "Partner Order API (有效 JWT)" \
+    if [ -n "$PARTNER_A_TOKEN" ]; then
+        test_endpoint "Partner A: Orders API (有權限)" \
             "https://localhost/partner/api/order/" 200 \
-            "-H 'Authorization: Bearer $PARTNER_TOKEN'"
+            "-H 'Authorization: Bearer $PARTNER_A_TOKEN'"
 
-        test_endpoint "Partner Product API (有效 JWT)" \
+        test_endpoint "Partner A: Products API (有權限)" \
             "https://localhost/partner/api/product/" 200 \
-            "-H 'Authorization: Bearer $PARTNER_TOKEN'"
-    else
-        warn "無法產生 Partner Token，跳過 Partner JWT 測試"
+            "-H 'Authorization: Bearer $PARTNER_A_TOKEN'"
+
+        test_endpoint "Partner A: Users API (有權限)" \
+            "https://localhost/partner/api/user/" 200 \
+            "-H 'Authorization: Bearer $PARTNER_A_TOKEN'"
+    fi
+
+    # 測試 Partner B（只有 orders 權限）
+    info "測試 Partner B (僅 Orders 權限)..."
+    PARTNER_B_TOKEN=$(./scripts/generate-jwt.sh partner-company-b 2>/dev/null || echo "")
+
+    if [ -n "$PARTNER_B_TOKEN" ]; then
+        test_endpoint "Partner B: Orders API (有權限)" \
+            "https://localhost/partner/api/order/" 200 \
+            "-H 'Authorization: Bearer $PARTNER_B_TOKEN'"
+
+        test_endpoint "Partner B: Products API (無權限，預期 403)" \
+            "https://localhost/partner/api/product/" 403 \
+            "-H 'Authorization: Bearer $PARTNER_B_TOKEN'"
+    fi
+
+    # 測試 Partner C（只有 products 權限）
+    info "測試 Partner C (僅 Products 權限)..."
+    PARTNER_C_TOKEN=$(./scripts/generate-jwt.sh partner-company-c 2>/dev/null || echo "")
+
+    if [ -n "$PARTNER_C_TOKEN" ]; then
+        test_endpoint "Partner C: Products API (有權限)" \
+            "https://localhost/partner/api/product/" 200 \
+            "-H 'Authorization: Bearer $PARTNER_C_TOKEN'"
+
+        test_endpoint "Partner C: Orders API (無權限，預期 403)" \
+            "https://localhost/partner/api/order/" 403 \
+            "-H 'Authorization: Bearer $PARTNER_C_TOKEN'"
     fi
 else
     warn "generate-jwt.sh 不存在，跳過 Partner API 測試"
 fi
 
-test_endpoint "Partner API (無 Token，預期失敗)" \
+# 測試無 Token
+test_endpoint "Partner API (無 Token，預期 401)" \
     "https://localhost/partner/api/order/" 401
 
 echo ""

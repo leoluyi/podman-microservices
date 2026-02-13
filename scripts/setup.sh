@@ -108,7 +108,81 @@ cp configs/frontend/nginx.conf /opt/app/configs/frontend/
 success "配置檔複製完成"
 
 # ============================================================================
-# 5. 部署 Quadlet 配置
+# 5. 配置 Partner Secrets（混合方案）
+# ============================================================================
+info "配置 Partner Secrets..."
+
+if [ "$MODE" == "dev" ]; then
+    info "開發模式：使用環境檔案配置"
+
+    # 複製 SSL Proxy 開發環境配置
+    mkdir -p ~/.config/containers/systemd/ssl-proxy.container.d
+    cp quadlet/ssl-proxy.container.d/environment.conf.example \
+       ~/.config/containers/systemd/ssl-proxy.container.d/environment.conf
+
+    success "已部署開發環境 Partner Secrets"
+    info "使用固定測試 Secrets（jwt-secret-partner-a/b/c）"
+
+else
+    info "生產模式：使用 Podman Secrets"
+
+    # 移除開發環境配置（如果存在）
+    rm -rf ~/.config/containers/systemd/ssl-proxy.container.d
+
+    # 檢查 Podman Secrets 是否存在
+    MISSING_SECRETS=()
+    for partner in a b c; do
+        secret_name="jwt-secret-partner-$partner"
+        if ! podman secret exists "$secret_name" 2>/dev/null; then
+            MISSING_SECRETS+=("$secret_name")
+        fi
+    done
+
+    if [ ${#MISSING_SECRETS[@]} -gt 0 ]; then
+        warning "以下 Podman Secrets 尚未創建："
+        for secret in "${MISSING_SECRETS[@]}"; do
+            echo "  - $secret"
+        done
+        echo ""
+        info "請使用以下命令創建 Partner Secrets："
+        echo ""
+        echo "  ./scripts/manage-partner-secrets.sh create a"
+        echo "  ./scripts/manage-partner-secrets.sh create b"
+        echo "  ./scripts/manage-partner-secrets.sh create c"
+        echo ""
+        warning "或執行快速創建（自動產生隨機 Secret）："
+        read -p "是否立即創建缺少的 Secrets？(y/N) " -n 1 -r
+        echo
+
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            for partner in a b c; do
+                secret_name="jwt-secret-partner-$partner"
+                if ! podman secret exists "$secret_name" 2>/dev/null; then
+                    info "創建 $secret_name..."
+                    SECRET_VALUE=$(openssl rand -base64 32)
+                    echo -n "$SECRET_VALUE" | podman secret create "$secret_name" -
+
+                    # 保存到臨時文件
+                    SECRET_FILE="/opt/app/configs/ssl-proxy/partner-secret-${partner}-$(date +%Y%m%d-%H%M%S).txt"
+                    echo "Partner ID: partner-company-$partner" > "$SECRET_FILE"
+                    echo "JWT Secret: $SECRET_VALUE" >> "$SECRET_FILE"
+                    chmod 600 "$SECRET_FILE"
+
+                    success "已創建並保存到: $SECRET_FILE"
+                done
+            done
+
+            warning "請將 Secret 檔案內容安全地提供給 Partner，然後刪除檔案"
+        else
+            warning "跳過 Secret 創建，ssl-proxy 將使用 fallback 環境變數"
+        fi
+    else
+        success "所有 Podman Secrets 已存在"
+    fi
+fi
+
+# ============================================================================
+# 6. 部署 Quadlet 配置
 # ============================================================================
 info "部署 Quadlet 配置..."
 
@@ -118,7 +192,7 @@ cp quadlet/*.{container,network} ~/.config/containers/systemd/ 2>/dev/null || tr
 success "Quadlet 配置已部署"
 
 # ============================================================================
-# 6. 配置 Debug 模式
+# 7. 配置 Debug 模式
 # ============================================================================
 info "配置 $MODE 模式..."
 
@@ -154,7 +228,7 @@ else
 fi
 
 # ============================================================================
-# 7. 重新載入 systemd
+# 8. 重新載入 systemd
 # ============================================================================
 info "重新載入 systemd daemon..."
 systemctl --user daemon-reload
@@ -162,7 +236,7 @@ systemctl --user daemon-reload
 success "systemd daemon 已重新載入"
 
 # ============================================================================
-# 8. 檢查容器鏡像
+# 9. 檢查容器鏡像
 # ============================================================================
 info "檢查容器鏡像..."
 
@@ -192,7 +266,7 @@ if [ ${#MISSING_IMAGES[@]} -gt 0 ]; then
 fi
 
 # ============================================================================
-# 9. 顯示後續步驟
+# 10. 顯示後續步驟
 # ============================================================================
 echo ""
 success "============================================"

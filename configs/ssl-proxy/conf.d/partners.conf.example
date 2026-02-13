@@ -1,0 +1,50 @@
+# /etc/nginx/conf.d/partners.conf
+# ============================================================================
+# Partner 配置文件
+# 定義每個 Partner 的 JWT Secret 和 API 訪問權限
+# ============================================================================
+
+# 重要：生產環境請使用強隨機 Secret
+# 產生方式：openssl rand -base64 32
+
+return 200 '{
+  "partners": {
+    "partner-company-a": {
+      "secret": "SECRET_A_REPLACE_WITH_STRONG_RANDOM_STRING_32_CHARS",
+      "name": "Company A Corp",
+      "permissions": {
+        "orders": ["read", "write"],
+        "products": ["read", "write"],
+        "users": ["read"]
+      }
+    },
+    "partner-company-b": {
+      "secret": "SECRET_B_REPLACE_WITH_STRONG_RANDOM_STRING_32_CHARS",
+      "name": "Company B Ltd",
+      "permissions": {
+        "orders": ["read"]
+      }
+    },
+    "partner-company-c": {
+      "secret": "SECRET_C_REPLACE_WITH_STRONG_RANDOM_STRING_32_CHARS",
+      "name": "Company C Inc",
+      "permissions": {
+        "products": ["read", "write"]
+      }
+    }
+  }
+}';
+
+# 說明：
+# - secret: 該 Partner 專屬的 JWT Secret（需要共享給 Partner）
+# - name: Partner 顯示名稱（用於日誌和審計）
+# - permissions: API 訪問權限
+#   - orders: 訂單 API (/partner/api/order/)
+#   - products: 產品 API (/partner/api/product/)
+#   - users: 用戶 API (/partner/api/user/)
+#   - 權限類型: read, write, delete
+#
+# 使用範例：
+# - partner-company-a 可以讀寫訂單和產品，唯讀用戶
+# - partner-company-b 只能唯讀訂單
+# - partner-company-c 可以讀寫產品
