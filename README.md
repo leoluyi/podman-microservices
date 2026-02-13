@@ -258,13 +258,21 @@ podman-microservices/
 │   ├── logs.sh                        # 查看服務日誌
 │   ├── test-connectivity.sh           # 連通性測試
 │   ├── generate-certs.sh              # 產生自簽 SSL 憑證
-│   └── generate-jwt.sh                # 產生測試 JWT Token
+│   └── generate-jwt.sh                # 產生 JWT Token（Partner 可用）
+│
+├── 📁 examples/                       # 範例代碼
+│   └── partner-clients/               # Partner API 客戶端範例
+│       ├── README.md                  # Partner 整合說明（Shell/Node.js/Python）
+│       ├── nodejs-client.js           # Node.js 客戶端範例
+│       └── python-client.py           # Python 客戶端範例
 │
 └── 📁 docs/                           # 詳細文件
     ├── ARCHITECTURE.md                # 架構詳解（含端口規劃）
     ├── DEPLOYMENT.md                  # 部署指南
-    ├── PARTNER-INTEGRATION.md         # Partner API 整合指南
-    └── DEBUG.md                       # 故障排除
+    ├── PARTNER-INTEGRATION.md         # Partner API 整合指南（含安全架構）
+    ├── ENDPOINT-PERMISSIONS.md        # API 端點權限對照表
+    ├── DEBUG.md                       # 故障排除
+    └── podman_rootless_min_offline_repo_rhel97_v3.md  # 離線部署指南（Air-Gapped）
 ```
 
 
@@ -476,11 +484,147 @@ echo $TOKEN | cut -d. -f2 | base64 -d 2>/dev/null  # 解碼查看 payload
 4. 更新 BFF 配置以包含新服務
 5. 啟動新服務
 
+## 離線環境部署（Air-Gapped）
+
+### 適用場景
+
+適合**完全隔離、無網路連線**的生產環境（金融、政府、高安全性場域）。
+
+### 快速摘要
+
+**目標**：在 RHEL 9.7 Air-Gapped 環境部署 Rootless Podman
+
+**策略**：最小 RPM 集合 + 本機 `file://` repo（不建整包 BaseOS/AppStream）
+
+**核心套件**（共 60-120 個 RPM，含依賴）：
+
+| 分類 | 關鍵套件 |
+|------|---------|
+| **核心** | `podman`, `podman-plugins` |
+| **Rootless 必要** | `shadow-utils`, `slirp4netns`, `fuse-overlayfs` |
+| **Runtime** | `crun`, `conmon`, `netavark`, `aardvark-dns` |
+| **Firewall** | `iptables-nft`, `nftables`, `conntrack-tools` |
+| **SELinux** | `container-selinux` |
+
+### 部署流程
+
+#### 階段 1：連網機（Rocky Linux 9.7）
+
+```bash
+# 1. 下載 RPM（含完整依賴樹）
+mkdir -p /tmp/podman-offline-repo
+sudo dnf download --resolve --alldeps --destdir /tmp/podman-offline-repo \
+  podman podman-plugins shadow-utils slirp4netns fuse-overlayfs \
+  containernetworking-plugins crun conmon netavark aardvark-dns \
+  container-selinux iptables-nft iptables-libs nftables \
+  libnftnl libnetfilter_conntrack conntrack-tools iproute procps-ng
+
+# 2. 產生 Repo metadata
+createrepo_c /tmp/podman-offline-repo
+
+# 3. 打包
+cd /tmp
+tar czf podman-rootless-offline-repo-rocky97.tgz podman-offline-repo
+sha256sum podman-rootless-offline-repo-rocky97.tgz > podman-rootless-offline-repo-rocky97.tgz.sha256
+```
+
+#### 階段 2：離線機（RHEL 9.7）
+
+```bash
+# 1. 驗證檔案完整性
+sha256sum -c podman-rootless-offline-repo-rocky97.tgz.sha256
+
+# 2. 解壓並掛載 Repo
+sudo mkdir -p /opt/offline-repos
+sudo tar xzf podman-rootless-offline-repo-rocky97.tgz -C /opt/offline-repos
+sudo mv /opt/offline-repos/podman-offline-repo /opt/offline-repos/podman
+
+# 3. 建立 Repo 設定
+sudo tee /etc/yum.repos.d/podman-offline.repo > /dev/null <<'EOF'
+[podman-offline]
+name=Podman Rootless Offline Repo
+baseurl=file:///opt/offline-repos/podman
+enabled=1
+gpgcheck=0
+metadata_expire=never
+EOF
+
+# 4. 安裝
+sudo dnf makecache --disablerepo="*" --enablerepo="podman-offline"
+sudo dnf install -y --disablerepo="*" --enablerepo="podman-offline" \
+  podman podman-plugins shadow-utils slirp4netns fuse-overlayfs \
+  containernetworking-plugins crun conmon netavark aardvark-dns \
+  container-selinux iptables-nft nftables iproute procps-ng
+```
+
+#### 階段 3：Rootless 系統設定
+
+```bash
+# 1. 啟用 User Namespace
+sudo sysctl -w user.max_user_namespaces=15000
+echo "user.max_user_namespaces=15000" | sudo tee /etc/sysctl.d/99-userns.conf
+
+# 2. 建立使用者並設定 subuid/subgid
+sudo useradd -m appuser
+echo "appuser:100000:65536" | sudo tee -a /etc/subuid
+echo "appuser:100000:65536" | sudo tee -a /etc/subgid
+
+# 3. 啟用 Linger（容器登出後持續運行）
+sudo loginctl enable-linger appuser
+
+# 4. 驗證
+su - appuser
+podman info | grep -E 'rootless|networkBackend|graphDriverName'
+# 預期: rootless=true, networkBackend=netavark, graphDriverName=overlay
+```
+
+### 關鍵設定檢查
+
+| 項目 | 檢查指令 | 預期結果 |
+|------|---------|---------|
+| User Namespace | `sysctl user.max_user_namespaces` | ≥ 15000 |
+| UID/GID Mapping | `which newuidmap newgidmap` | 兩個路徑都存在 |
+| Storage Driver | `podman info --format '{{.Store.GraphDriverName}}'` | `overlay` |
+| Network Backend | `podman network ls` | 至少有預設網路 |
+
+### 常見問題快速排查
+
+| 症狀 | 原因 | 解決方式 |
+|------|------|---------|
+| `cannot find newuidmap` | `shadow-utils` 缺失 | 補裝 RPM |
+| `cannot setup slirp4netns` | `slirp4netns` 缺失 | 補裝 RPM |
+| `graphDriverName: vfs` | `fuse-overlayfs` 缺失 | 補裝後 `podman system reset` |
+| `iptables: command not found` | `iptables-nft` 缺失 | 補裝 RPM |
+| 容器登出後消失 | 未啟用 linger | `loginctl enable-linger` |
+
+### 映像管理（離線環境）
+
+離線環境無法 `podman pull`，需透過以下流程：
+
+```bash
+# 連網機：匯出映像
+podman pull docker.io/nginx:alpine
+podman save -o nginx-alpine.tar docker.io/nginx:alpine
+sha256sum nginx-alpine.tar > nginx-alpine.tar.sha256
+
+# 傳輸後，離線機：匯入映像
+sha256sum -c nginx-alpine.tar.sha256
+podman load -i nginx-alpine.tar
+```
+
+### 完整文件
+
+詳細操作手冊、troubleshooting、維運建議：
+- 📖 [Rootless Podman 離線部署完整指南](docs/podman_rootless_min_offline_repo_rhel97_v3.md)
+
+---
+
 ## 文件
 
 - [架構詳解](docs/ARCHITECTURE.md) - 完整架構說明
 - [部署指南](docs/DEPLOYMENT.md) - 詳細部署步驟
 - [Partner 整合指南](docs/PARTNER-INTEGRATION.md) - Partner API 設定與整合
+- [Rootless Podman 離線部署](docs/podman_rootless_min_offline_repo_rhel97_v3.md) - Air-Gapped 環境部署指南
 - [Debug 指南](docs/DEBUG.md) - 故障排除
 
 ## 版本資訊
