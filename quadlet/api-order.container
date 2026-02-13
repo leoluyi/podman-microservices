@@ -1,5 +1,5 @@
 [Unit]
-Description=Order API Service (Exposed via Public Nginx)
+Description=Order API Service (Exposed via SSL Proxy)
 Documentation=https://github.com/your-org/api-order
 After=internal-net.service
 Requires=internal-net.service
@@ -8,7 +8,8 @@ Requires=internal-net.service
 # ============================================================================
 # 鏡像配置
 # ============================================================================
-Image=docker.io/library/nginx:alpine
+Image=localhost/api-order:latest
+
 ContainerName=api-order
 
 # ============================================================================
@@ -16,16 +17,14 @@ ContainerName=api-order
 # ============================================================================
 Network=internal-net
 
-# Debug 模式端口映射（只綁定 localhost）
-# 生產環境：此變數為空，不暴露端口
-# 開發環境：127.0.0.1:8082:8082
-PublishPort=${DEBUG_PORT_8082}
+# Debug 模式端口映射
+PublishPort=${DEBUG_PORT_8102}
 
 # ============================================================================
 # 環境變數
 # ============================================================================
 Environment=SERVICE_NAME=api-order
-Environment=SERVICE_PORT=8082
+Environment=SERVICE_PORT=8080
 Environment=ENVIRONMENT=production
 
 # 資料庫連線
@@ -33,21 +32,10 @@ Environment=DB_HOST=your-db-host.example.com
 Environment=DB_PORT=5432
 Environment=DB_NAME=orderdb
 
-# 訊息佇列（如適用）
-# Environment=REDIS_HOST=redis.example.com
-# Environment=REDIS_PORT=6379
-# Environment=KAFKA_BROKERS=kafka1:9092,kafka2:9092
-
-# ============================================================================
-# Volume 掛載
-# ============================================================================
-# Volume=/opt/app/api-order/config:/app/config:ro
-# Volume=/opt/app/api-order/logs:/app/logs:rw
-
 # ============================================================================
 # 健康檢查
 # ============================================================================
-HealthCmd=curl -f http://localhost:8082/health || exit 1
+HealthCmd=curl -f http://localhost:8080/health || exit 1
 HealthInterval=30s
 HealthTimeout=10s
 HealthRetries=3
@@ -77,9 +65,8 @@ LogDriver=journald
 Label=app=microservices
 Label=service=api-order
 Label=tier=backend
-# 標記此 API 需要透過 Public Nginx 對外開放
 Label=public-access=true
-Label=nginx-backend=true
+Label=exposed-via=ssl-proxy
 
 [Service]
 TimeoutStartSec=120

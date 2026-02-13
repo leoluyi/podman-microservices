@@ -1,5 +1,6 @@
 [Network]
 # 內部隔離網路
+# 用途：Backend APIs 之間的內部通訊
 NetworkName=internal-net
 
 # 子網設定
@@ -13,7 +14,7 @@ Internal=true
 # 啟用 DNS 讓容器可以透過名稱互相訪問
 DisableDNS=false
 
-# 標籤，方便識別和管理
+# 標籤
 Label=app=microservices
 Label=tier=internal
 Label=environment=production

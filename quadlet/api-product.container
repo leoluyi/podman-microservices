@@ -1,5 +1,5 @@
 [Unit]
-Description=Product API Service (Exposed via Public Nginx)
+Description=Product API Service (Exposed via SSL Proxy)
 Documentation=https://github.com/your-org/api-product
 After=internal-net.service
 Requires=internal-net.service
@@ -8,7 +8,8 @@ Requires=internal-net.service
 # ============================================================================
 # 鏡像配置
 # ============================================================================
-Image=docker.io/library/nginx:alpine
+Image=localhost/api-product:latest
+
 ContainerName=api-product
 
 # ============================================================================
@@ -17,13 +18,13 @@ ContainerName=api-product
 Network=internal-net
 
 # Debug 模式端口映射
-PublishPort=${DEBUG_PORT_8083}
+PublishPort=${DEBUG_PORT_8103}
 
 # ============================================================================
 # 環境變數
 # ============================================================================
 Environment=SERVICE_NAME=api-product
-Environment=SERVICE_PORT=8083
+Environment=SERVICE_PORT=8080
 Environment=ENVIRONMENT=production
 
 # 資料庫連線
@@ -31,20 +32,10 @@ Environment=DB_HOST=your-db-host.example.com
 Environment=DB_PORT=5432
 Environment=DB_NAME=productdb
 
-# 快取設定（如適用）
-# Environment=MEMCACHED_HOST=memcached.example.com
-# Environment=MEMCACHED_PORT=11211
-
-# ============================================================================
-# Volume 掛載
-# ============================================================================
-# Volume=/opt/app/api-product/config:/app/config:ro
-# Volume=/opt/app/api-product/logs:/app/logs:rw
-
 # ============================================================================
 # 健康檢查
 # ============================================================================
-HealthCmd=curl -f http://localhost:8083/health || exit 1
+HealthCmd=curl -f http://localhost:8080/health || exit 1
 HealthInterval=30s
 HealthTimeout=10s
 HealthRetries=3
@@ -75,7 +66,7 @@ Label=app=microservices
 Label=service=api-product
 Label=tier=backend
 Label=public-access=true
-Label=nginx-backend=true
+Label=exposed-via=ssl-proxy
 
 [Service]
 TimeoutStartSec=120

@@ -1,23 +1,22 @@
 # ============================================================================
-# Debug 模式環境變數覆蓋
+# Debug 模式環境變數覆蓋 - API User
 # ============================================================================
-# 此檔案用於開發/測試環境
-# 生產環境請刪除此檔案或重命名為 environment.conf.disabled
+# 用途：開發/測試環境啟用 localhost 訪問
 #
 # 使用方式：
-# 1. 開發環境：將此檔案命名為 environment.conf
-# 2. 生產環境：刪除或重命名此檔案
+# 1. 開發環境：./scripts/setup.sh dev（會自動啟用）
+# 2. 生產環境：./scripts/setup.sh prod（會自動禁用）
 #
-# 套用變更後需執行：
-#   systemctl --user daemon-reload
-#   systemctl --user restart api-user.service
+# 效果：
+# - 開發模式：可透過 http://localhost:8101 直接訪問此 API
+# - 生產模式：完全隔離，無法從主機訪問
 # ============================================================================
 
 [Container]
-# 開啟 Debug 端口（只綁定 localhost）
-# 格式：127.0.0.1:HOST_PORT:CONTAINER_PORT
-Environment=DEBUG_PORT_8081=127.0.0.1:8081:8081
+# 開啟 Debug 端口（只綁定 localhost，安全）
+Environment=DEBUG_PORT_8101=127.0.0.1:8101:8080
 
 # 可選：開發環境特定設定
 # Environment=LOG_LEVEL=debug
 # Environment=ENABLE_DEBUG_MODE=true
+# Environment=CORS_ENABLED=true

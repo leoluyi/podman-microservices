@@ -1,7 +1,9 @@
 #!/bin/bash
 # ============================================================================
-# 測試服務連通性與網路隔離
+# 連通性測試腳本
 # ============================================================================
+
+set -e
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -9,145 +11,147 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-success() {
-    echo -e "${GREEN}✓${NC} $1"
-}
+info() { echo -e "${BLUE}[TEST]${NC} $1"; }
+success() { echo -e "${GREEN}[PASS]${NC} $1"; }
+fail() { echo -e "${RED}[FAIL]${NC} $1"; }
+warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 
-fail() {
-    echo -e "${RED}✗${NC} $1"
-}
+PASSED=0
+FAILED=0
 
-info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
-warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
+# ============================================================================
+# 測試函數
+# ============================================================================
 test_endpoint() {
-    local url=$1
-    local description=$2
-    local expected=$3  # "success" or "fail"
+    local name=$1
+    local url=$2
+    local expected_code=${3:-200}
+    local extra_args=${4:-""}
     
-    if curl -sf "$url" > /dev/null 2>&1; then
-        if [ "$expected" == "success" ]; then
-            success "$description"
+    info "測試 $name: $url"
+    
+    if response=$(curl -k -s -w "\n%{http_code}" $extra_args "$url" 2>&1); then
+        http_code=$(echo "$response" | tail -n 1)
+        body=$(echo "$response" | sed '$d')
+        
+        if [ "$http_code" == "$expected_code" ]; then
+            success "  HTTP $http_code ✓"
+            ((PASSED++))
         else
-            fail "$description (應該失敗但成功了)"
+            fail "  HTTP $http_code (期望 $expected_code) ✗"
+            echo "  回應: $body"
+            ((FAILED++))
         fi
     else
-        if [ "$expected" == "fail" ]; then
-            success "$description (正確地被阻擋)"
-        else
-            fail "$description"
-        fi
+        fail "  連線失敗 ✗"
+        ((FAILED++))
     fi
 }
 
-echo ""
-echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}微服務連通性測試${NC}"
-echo -e "${BLUE}========================================${NC}"
-echo ""
-
 # ============================================================================
-# 1. 測試對外服務（應該成功）
+# 開始測試
 # ============================================================================
-info "測試對外服務..."
-test_endpoint "http://localhost:3000" "Frontend (Port 3000)" "success"
-test_endpoint "http://localhost:8080/health" "BFF (Port 8080)" "success"
-test_endpoint "http://localhost:8090/health" "Public Nginx (Port 8090)" "success"
+echo ""
+echo "=========================================="
+echo "  連通性測試"
+echo "=========================================="
 echo ""
 
-# ============================================================================
-# 2. 測試 Debug 模式（依環境而定）
-# ============================================================================
-info "測試 Debug 模式端口..."
-if curl -sf http://localhost:8081/health > /dev/null 2>&1; then
-    success "API-User localhost:8081 可訪問 (Debug 模式已啟用)"
-    success "API-Order localhost:8082 可訪問 (Debug 模式已啟用)" 
-    success "API-Product localhost:8083 可訪問 (Debug 模式已啟用)"
-    warning "目前處於開發/測試環境"
+# 1. SSL Proxy 健康檢查
+info "=== SSL Proxy ==="
+test_endpoint "HTTPS 健康檢查" "https://localhost/health"
+test_endpoint "HTTP 重定向" "http://localhost/" 301
+
+echo ""
+
+# 2. 前端訪問
+info "=== Frontend ==="
+test_endpoint "前端首頁" "https://localhost/"
+
+echo ""
+
+# 3. JWT Token 測試
+info "=== API 端點 (JWT Token) ==="
+
+# 產生測試 Token
+if [ -f "./scripts/generate-jwt.sh" ]; then
+    TOKEN=$(./scripts/generate-jwt.sh test-user 2>/dev/null || echo "")
 else
-    success "Backend APIs 從 localhost 無法訪問 (生產模式，完全隔離)"
-    info "目前處於生產環境"
-fi
-echo ""
-
-# ============================================================================
-# 3. 測試 Public Nginx API Key 驗證
-# ============================================================================
-info "測試 API Key 驗證..."
-
-# 沒有 API Key（應該失敗）
-if curl -sf http://localhost:8090/api/order/ > /dev/null 2>&1; then
-    fail "無 API Key 時應該被拒絕"
-else
-    success "無 API Key 正確被拒絕 (401)"
+    warn "generate-jwt.sh 不存在，跳過 JWT 測試"
+    TOKEN=""
 fi
 
-# 錯誤的 API Key（應該失敗）
-if curl -sf -H "X-API-Key: wrong-key" http://localhost:8090/api/order/ > /dev/null 2>&1; then
-    fail "錯誤的 API Key 應該被拒絕"
+if [ -n "$TOKEN" ]; then
+    test_endpoint "API (有效 Token)" "https://localhost/api/users" 200 "-H 'Authorization: Bearer $TOKEN'"
 else
-    success "錯誤的 API Key 正確被拒絕 (401)"
+    test_endpoint "API (無 Token)" "https://localhost/api/users" 401
 fi
 
-# 正確的 API Key（應該成功，但可能 404 因為沒有實際 API）
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "X-API-Key: dev-key-12345678901234567890" http://localhost:8090/api/order/)
-if [ "$HTTP_CODE" == "200" ] || [ "$HTTP_CODE" == "404" ] || [ "$HTTP_CODE" == "502" ]; then
-    success "正確的 API Key 通過驗證 (HTTP $HTTP_CODE)"
+test_endpoint "API (無 Token，預期失敗)" "https://localhost/api/users" 401
+
+echo ""
+
+# 4. Partner API 測試
+info "=== Partner API (API Key) ==="
+test_endpoint "Partner Order API (有效 Key)" \
+    "https://localhost/partner/api/order/" 200 \
+    "-H 'X-API-Key: dev-key-12345678901234567890'"
+
+test_endpoint "Partner API (無效 Key，預期失敗)" \
+    "https://localhost/partner/api/order/" 401 \
+    "-H 'X-API-Key: invalid-key'"
+
+echo ""
+
+# 5. Backend APIs 隔離測試
+info "=== 網路隔離測試 ==="
+
+# 檢查是否為開發模式
+if [ -f ~/.config/containers/systemd/api-user.container.d/environment.conf ]; then
+    MODE="dev"
 else
-    fail "正確的 API Key 應該通過驗證 (得到 HTTP $HTTP_CODE)"
+    MODE="prod"
 fi
+
+if [ "$MODE" == "dev" ]; then
+    info "開發模式：測試 localhost Debug 端口"
+    test_endpoint "API-User Debug" "http://localhost:8101/health"
+    test_endpoint "API-Order Debug" "http://localhost:8102/health"
+    test_endpoint "API-Product Debug" "http://localhost:8103/health"
+else
+    info "生產模式：驗證 Backend APIs 完全隔離"
+    
+    if curl -s --max-time 2 http://localhost:8101/health &>/dev/null; then
+        fail "  API-User 不應該可以從主機訪問 ✗"
+        ((FAILED++))
+    else
+        success "  API-User 已隔離（無法從主機訪問）✓"
+        ((PASSED++))
+    fi
+fi
+
 echo ""
 
 # ============================================================================
-# 4. 測試容器間連通性（從 BFF 訪問 Backend APIs）
+# 測試結果摘要
 # ============================================================================
-info "測試容器間連通性..."
-
-if podman exec bff curl -sf http://api-user:8081/health > /dev/null 2>&1; then
-    success "BFF → API-User 連通"
-else
-    warning "BFF → API-User 無法連通（可能容器未啟動或無健康檢查端點）"
-fi
-
-if podman exec bff curl -sf http://api-order:8082/health > /dev/null 2>&1; then
-    success "BFF → API-Order 連通"
-else
-    warning "BFF → API-Order 無法連通（可能容器未啟動或無健康檢查端點）"
-fi
-
-if podman exec bff curl -sf http://api-product:8083/health > /dev/null 2>&1; then
-    success "BFF → API-Product 連通"
-else
-    warning "BFF → API-Product 無法連通（可能容器未啟動或無健康檢查端點）"
-fi
+echo "=========================================="
+echo "  測試結果"
+echo "=========================================="
+echo ""
+echo "  通過: $PASSED"
+echo "  失敗: $FAILED"
 echo ""
 
-# ============================================================================
-# 5. 測試網路隔離（從 Frontend 無法訪問 Backend APIs）
-# ============================================================================
-info "測試網路隔離..."
-
-if podman exec frontend curl -sf http://api-user:8081/health > /dev/null 2>&1; then
-    fail "Frontend 不應該能訪問 API-User (網路隔離失敗)"
+if [ $FAILED -eq 0 ]; then
+    success "所有測試通過！✓"
+    exit 0
 else
-    success "Frontend 無法訪問 Backend APIs (網路隔離正確)"
+    fail "部分測試失敗 ✗"
+    echo ""
+    echo "故障排除："
+    echo "  1. 檢查服務狀態: ./scripts/status.sh"
+    echo "  2. 查看日誌: ./scripts/logs.sh ssl-proxy"
+    echo "  3. 查看文件: docs/DEBUG.md"
+    exit 1
 fi
-echo ""
-
-# ============================================================================
-# 總結
-# ============================================================================
-echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}測試完成${NC}"
-echo -e "${BLUE}========================================${NC}"
-echo ""
-info "如有失敗項目，請檢查："
-echo "  1. 容器是否正常運行：podman ps"
-echo "  2. 服務日誌：./scripts/logs.sh <service-name>"
-echo "  3. 網路配置：podman network inspect internal-net"
-echo ""

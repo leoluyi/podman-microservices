@@ -1,42 +1,30 @@
 #!/bin/bash
 # ============================================================================
-# Podman 微服務架構 - 初始化部署腳本
+# 初始化部署腳本
+# 用途：準備環境、配置 Debug 模式、部署 Quadlet 配置
 # ============================================================================
 
 set -e
 
-# 顏色定義
+# 顏色輸出
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# 函數：印出資訊
-info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
+# 輔助函數
+info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-# ============================================================================
 # 檢查參數
-# ============================================================================
-if [ $# -ne 1 ]; then
-    error "用法: $0 {dev|prod}"
+if [ $# -eq 0 ]; then
+    error "使用方式: $0 {dev|prod}"
     echo ""
-    echo "  dev  - 開發/測試環境（Backend APIs 綁定到 localhost，方便 debug）"
-    echo "  prod - 生產環境（Backend APIs 完全隔離）"
+    echo "  dev  - 開發模式（啟用 Debug 端口）"
+    echo "  prod - 生產模式（完全網路隔離）"
     exit 1
 fi
 
@@ -44,14 +32,14 @@ MODE=$1
 
 if [[ "$MODE" != "dev" && "$MODE" != "prod" ]]; then
     error "無效的模式: $MODE"
-    error "請使用 'dev' 或 'prod'"
+    error "使用方式: $0 {dev|prod}"
     exit 1
 fi
 
-info "部署模式: $MODE"
+info "初始化部署環境（模式: $MODE）"
 
 # ============================================================================
-# 檢查前置需求
+# 1. 檢查前置需求
 # ============================================================================
 info "檢查前置需求..."
 
@@ -61,130 +49,165 @@ if ! command -v podman &> /dev/null; then
     exit 1
 fi
 
-PODMAN_VERSION=$(podman --version | awk '{print $3}')
-info "Podman 版本: $PODMAN_VERSION"
-
 # 檢查 systemd
 if ! command -v systemctl &> /dev/null; then
-    error "systemctl 未找到"
+    error "systemctl 未安裝"
     exit 1
 fi
 
-success "前置檢查完成"
+# 檢查 Podman 版本
+PODMAN_VERSION=$(podman version --format "{{.Version}}")
+info "Podman 版本: $PODMAN_VERSION"
 
 # ============================================================================
-# 創建必要的目錄
+# 2. 建立必要目錄
 # ============================================================================
-info "創建目錄結構..."
+info "建立必要目錄..."
 
-sudo mkdir -p /opt/app/{nginx-public/{conf.d,logs},bff,frontend}
-sudo chown -R $USER:$USER /opt/app
-
-success "目錄創建完成"
-
-# ============================================================================
-# 部署 Quadlet 配置檔
-# ============================================================================
-info "部署 Quadlet 配置檔到 /etc/containers/systemd/..."
-
-# 創建 user systemd 目錄
 mkdir -p ~/.config/containers/systemd
+mkdir -p /opt/app/{certs,logs/{ssl-proxy,frontend,bff}}
+mkdir -p /opt/app/configs/{ssl-proxy/{conf.d,lua},frontend,bff}
 
-# 複製所有 .network 和 .container 檔案
-cp -v quadlet/*.network ~/.config/containers/systemd/ 2>/dev/null || true
-cp -v quadlet/*.container ~/.config/containers/systemd/
-
-success "Quadlet 配置檔部署完成"
+success "目錄建立完成"
 
 # ============================================================================
-# 設定環境模式（Dev or Prod）
+# 3. 檢查 SSL 憑證
 # ============================================================================
-info "配置環境模式: $MODE"
+info "檢查 SSL 憑證..."
 
-if [ "$MODE" == "dev" ]; then
-    # 開發模式：啟用 Debug 端口
-    info "啟用 Debug 模式（Backend APIs 綁定到 localhost）"
-    
-    for service in api-user api-order api-product; do
-        mkdir -p ~/.config/containers/systemd/${service}.container.d
-        cp quadlet/${service}.container.d/environment.conf.example \
-           ~/.config/containers/systemd/${service}.container.d/environment.conf
-        success "已啟用 ${service} Debug 端口"
-    done
-    
-elif [ "$MODE" == "prod" ]; then
-    # 生產模式：禁用 Debug 端口
-    info "生產模式（Backend APIs 完全隔離）"
-    
-    for service in api-user api-order api-product; do
-        if [ -d ~/.config/containers/systemd/${service}.container.d ]; then
-            rm -rf ~/.config/containers/systemd/${service}.container.d
-            success "已禁用 ${service} Debug 端口"
-        fi
-    done
+if [ ! -f "/opt/app/certs/server.crt" ] || [ ! -f "/opt/app/certs/server.key" ]; then
+    warning "SSL 憑證不存在"
+    info "執行憑證產生腳本..."
+    ./scripts/generate-certs.sh
+else
+    success "SSL 憑證已存在"
 fi
 
 # ============================================================================
-# 部署應用配置
+# 4. 複製配置檔
 # ============================================================================
-info "部署應用配置..."
+info "複製配置檔..."
 
-# 複製 Nginx 配置
-cp -rv configs/nginx-public/* /opt/app/nginx-public/
+# SSL Proxy 配置
+cp -r configs/ssl-proxy/* /opt/app/configs/ssl-proxy/
 
-success "應用配置部署完成"
+# Frontend 配置
+cp configs/frontend/nginx.conf /opt/app/configs/frontend/
+
+success "配置檔複製完成"
 
 # ============================================================================
-# 重新載入 systemd
+# 5. 部署 Quadlet 配置
+# ============================================================================
+info "部署 Quadlet 配置..."
+
+# 複製所有 .container 和 .network 檔案
+cp quadlet/*.{container,network} ~/.config/containers/systemd/ 2>/dev/null || true
+
+success "Quadlet 配置已部署"
+
+# ============================================================================
+# 6. 配置 Debug 模式
+# ============================================================================
+info "配置 $MODE 模式..."
+
+# API 服務列表
+APIS=("api-user" "api-order" "api-product")
+
+if [ "$MODE" == "dev" ]; then
+    info "啟用 Debug 模式（localhost 端口映射）"
+    
+    for api in "${APIS[@]}"; do
+        mkdir -p ~/.config/containers/systemd/${api}.container.d
+        cp quadlet/${api}.container.d/environment.conf.example \
+           ~/.config/containers/systemd/${api}.container.d/environment.conf
+        success "  $api: Debug 端口已啟用"
+    done
+    
+    success "開發模式配置完成"
+    info "Backend APIs 可透過 localhost 訪問："
+    info "  - API-User:    http://localhost:8101"
+    info "  - API-Order:   http://localhost:8102"
+    info "  - API-Product: http://localhost:8103"
+    
+else
+    info "生產模式（完全網路隔離）"
+    
+    for api in "${APIS[@]}"; do
+        rm -rf ~/.config/containers/systemd/${api}.container.d
+        success "  $api: Debug 端口已禁用"
+    done
+    
+    success "生產模式配置完成"
+    info "Backend APIs 完全隔離，只能透過 SSL Proxy 訪問"
+fi
+
+# ============================================================================
+# 7. 重新載入 systemd
 # ============================================================================
 info "重新載入 systemd daemon..."
 systemctl --user daemon-reload
-success "systemd daemon 重新載入完成"
+
+success "systemd daemon 已重新載入"
 
 # ============================================================================
-# 拉取鏡像（如果需要）
+# 8. 檢查容器鏡像
 # ============================================================================
 info "檢查容器鏡像..."
-warning "請確保已將正確的鏡像推送到 Registry 或本地載入"
-echo ""
-echo "如需拉取鏡像，請執行："
-echo "  podman pull docker.io/your-registry/api-user:latest"
-echo "  podman pull docker.io/your-registry/api-order:latest"
-echo "  podman pull docker.io/your-registry/api-product:latest"
-echo ""
 
-# ============================================================================
-# 完成
-# ============================================================================
-echo ""
-success "=========================================="
-success "部署完成！"
-success "=========================================="
-echo ""
-info "環境模式: $MODE"
-echo ""
+IMAGES=("localhost/api-user:latest" "localhost/api-order:latest" "localhost/api-product:latest" "localhost/bff:latest")
+MISSING_IMAGES=()
 
-if [ "$MODE" == "dev" ]; then
-    info "Debug 端口已開啟："
-    echo "  - API-User:    http://localhost:8081"
-    echo "  - API-Order:   http://localhost:8082"
-    echo "  - API-Product: http://localhost:8083"
+for img in "${IMAGES[@]}"; do
+    if ! podman image exists "$img"; then
+        warning "  鏡像不存在: $img"
+        MISSING_IMAGES+=("$img")
+    else
+        success "  鏡像存在: $img"
+    fi
+done
+
+if [ ${#MISSING_IMAGES[@]} -gt 0 ]; then
+    warning "發現缺少的鏡像"
+    info "請先建置鏡像："
     echo ""
+    echo "  cd dockerfiles/api-user && podman build -t localhost/api-user:latest ."
+    echo "  cd dockerfiles/api-order && podman build -t localhost/api-order:latest ."
+    echo "  cd dockerfiles/api-product && podman build -t localhost/api-product:latest ."
+    echo "  cd dockerfiles/bff && podman build -t localhost/bff:latest ."
+    echo ""
+    warning "或使用 Nginx 替代（用於快速測試）："
+    info "  修改 quadlet/*.container 中的 Image 為 nginx:alpine"
 fi
 
-info "對外服務端口："
-echo "  - Frontend:      http://localhost:3000"
-echo "  - BFF:           http://localhost:8080"
-echo "  - Public Nginx:  http://localhost:8090"
+# ============================================================================
+# 9. 顯示後續步驟
+# ============================================================================
+echo ""
+success "============================================"
+success "初始化完成！"
+success "============================================"
+echo ""
+info "後續步驟："
+echo ""
+echo "  1. 啟動服務："
+echo "     ./scripts/start-all.sh"
+echo ""
+echo "  2. 檢查狀態："
+echo "     ./scripts/status.sh"
+echo ""
+echo "  3. 測試連通性："
+echo "     ./scripts/test-connectivity.sh"
+echo ""
+if [ "$MODE" == "dev" ]; then
+    echo "  4. Debug 端口測試："
+    echo "     curl http://localhost:8101/health"
+    echo "     curl http://localhost:8102/health"
+    echo "     curl http://localhost:8103/health"
+    echo ""
+fi
+echo "  5. HTTPS 訪問："
+echo "     curl -k https://localhost/"
 echo ""
 
-info "下一步："
-echo "  1. 檢查鏡像：podman images"
-echo "  2. 啟動服務：./scripts/start-all.sh"
-echo "  3. 查看狀態：./scripts/status.sh"
-echo "  4. 查看日誌：./scripts/logs.sh <service-name>"
-echo ""
-
-info "如需切換環境模式，請執行："
-echo "  ./scripts/setup.sh {dev|prod}"
-echo ""
+exit 0
