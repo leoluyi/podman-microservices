@@ -1,7 +1,7 @@
 [Unit]
 Description=BFF (Backend For Frontend) Gateway - HTTP only
 Documentation=https://github.com/your-org/bff-service
-After=internal-net.service api-user.service api-order.service api-product.service ssl-proxy.service
+After=internal-net.service api-user.service api-order.service api-product.service
 Requires=internal-net.service
 Wants=api-user.service api-order.service api-product.service
 

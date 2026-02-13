@@ -34,9 +34,6 @@ Volume=/opt/app/certs/server.key:/etc/nginx/ssl/server.key:ro
 Volume=/opt/app/configs/ssl-proxy/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
 Volume=/opt/app/configs/ssl-proxy/conf.d:/etc/nginx/conf.d:ro
 
-# 掛載 Lua 腳本
-Volume=/opt/app/configs/ssl-proxy/lua:/usr/local/openresty/nginx/lua:ro
-
 # 日誌目錄
 Volume=/opt/app/logs/ssl-proxy:/var/log/nginx:rw
 

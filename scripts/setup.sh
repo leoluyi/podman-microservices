@@ -64,9 +64,20 @@ info "Podman 版本: $PODMAN_VERSION"
 # ============================================================================
 info "建立必要目錄..."
 
+# 建立 systemd 配置目錄
 mkdir -p ~/.config/containers/systemd
-mkdir -p /opt/app/{certs,logs/{ssl-proxy,frontend,bff}}
-mkdir -p /opt/app/configs/{ssl-proxy/{conf.d,lua},frontend,bff}
+
+# 建立應用目錄結構
+mkdir -p /opt/app/certs
+mkdir -p /opt/app/logs/{ssl-proxy,frontend,bff}
+mkdir -p /opt/app/configs/ssl-proxy/conf.d
+mkdir -p /opt/app/configs/frontend
+
+# 設定目錄權限
+chmod 755 /opt/app
+chmod 700 /opt/app/certs
+chmod 755 /opt/app/logs
+chmod 755 /opt/app/configs
 
 success "目錄建立完成"
 
