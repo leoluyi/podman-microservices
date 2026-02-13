@@ -87,13 +87,25 @@ sudo yum install jq
 # 設定環境變數
 export JWT_SECRET_PARTNER_A="your-secret-from-provider"
 
-# 產生 Token
+# 產生 Token（預設永久有效）
 TOKEN=$(../../scripts/generate-jwt.sh partner-company-a)
+
+# 產生 Token（自訂有效期 - 30 天）
+TOKEN=$(../../scripts/generate-jwt.sh partner-company-a 2592000)
+
+# 產生 Token（明確指定永久）
+TOKEN=$(../../scripts/generate-jwt.sh partner-company-a 0)
 
 # 使用 Token 呼叫 API
 curl -H "Authorization: Bearer $TOKEN" \
      https://api.example.com/partner/api/order/
 ```
+
+**有效期參考**：
+- 永久 = 0 或不指定（預設，避免失效問題）
+- 1 天 = 86400
+- 30 天 = 2592000
+- 1 年 = 31536000
 
 ### 整合範例：定時同步資料
 
@@ -155,22 +167,46 @@ jobs:
 
 **輸出格式**：
 - **stdout**：只輸出 JWT Token（方便腳本使用）
-- **stderr**：輸出 Debug 資訊（Partner ID、權限、過期時間、使用範例）
+- **stderr**：輸出 Debug 資訊（Partner ID、權限、有效期、過期時間、安全提醒、使用範例）
 
-**Token 預設有效期**：24 小時
+**Token 預設有效期**：永久（至 2286 年）
+- 避免 Token 突然失效導致服務中斷
+- 降低維運負擔，無需定期更新 Token
+- 仍可透過參數指定短效 Token
 
-**範例輸出（stderr）**：
+**可配置有效期**：支援自訂任意有效期（秒為單位，0 代表永久）
+
+**範例輸出（stderr）- 永久 Token**：
 ```
 ✓ JWT Token 產生成功
 Partner ID: partner-company-a
 權限: orders:read,write products:read,write users:read
-過期時間: 2026-02-15 10:30:00
+有效期: 永久（至 2286 年）
+過期時間: Sat Nov 20 17:46:39 2286
+
+⚠️  永久/長效 Token 安全提醒：
+   - 請確保 JWT Secret 安全儲存（不要硬編碼、不要提交到版控）
+   - 建議定期（如每年）主動輪換 Secret
+   - Token 洩漏時請立即聯繫 API 提供方輪換 Secret
 
 使用範例:
   # Orders API
   curl -k -H "Authorization: Bearer $TOKEN" https://localhost/partner/api/order/
   # Products API
   curl -k -H "Authorization: Bearer $TOKEN" https://localhost/partner/api/product/
+```
+
+**範例輸出（stderr）- 30 天有效期**：
+```
+✓ JWT Token 產生成功
+Partner ID: partner-company-a
+權限: orders:read,write products:read,write users:read
+有效期: 30 天
+過期時間: Fri Mar 14 10:30:00 2026
+
+使用範例:
+  # Orders API
+  curl -k -H "Authorization: Bearer $TOKEN" https://localhost/partner/api/order/
 ```
 
 ---

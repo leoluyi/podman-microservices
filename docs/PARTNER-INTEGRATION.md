@@ -476,8 +476,11 @@ Partner 可以選擇以下任一方式在自己的系統中產生 Token：
 # 設定環境變數（使用 API 提供方給的 Secret）
 export JWT_SECRET_PARTNER_A="your-secret-from-provider"
 
-# 產生 Token
+# 產生 Token（預設永久有效）
 TOKEN=$(./generate-jwt.sh partner-company-a)
+
+# 產生 Token（自訂有效期）
+TOKEN=$(./generate-jwt.sh partner-company-a 2592000)  # 30 天有效期
 
 # 使用 Token 呼叫 API
 curl -H "Authorization: Bearer $TOKEN" https://api.example.com/partner/api/order/
@@ -486,9 +489,25 @@ curl -H "Authorization: Bearer $TOKEN" https://api.example.com/partner/api/order
 **腳本特性**：
 - ✅ 自動產生符合規範的 JWT Token
 - ✅ 包含完整的 Payload 欄位（sub, iss, aud, iat, exp）
-- ✅ 預設有效期 24 小時
+- ✅ 預設永久有效（至 2286 年，避免 Token 突然失效）
+- ✅ 可自訂有效期（支援任意秒數或永久）
 - ✅ 輸出詳細的 Debug 資訊（stderr）
 - ✅ 只輸出 Token 到 stdout（方便腳本使用）
+
+**有效期說明**：
+| 時長 | 秒數 | 使用場景 |
+|------|------|----------|
+| 永久 | 0 或不指定 | 預設（避免失效問題，最方便） |
+| 1 小時 | 3600 | 測試開發 |
+| 1 天 | 86400 | 短期測試 |
+| 30 天 | 2592000 | 需要定期更新的場景 |
+| 1 年 | 31536000 | 年度審查輪換 |
+
+⚠️ **永久 Token 安全提醒**：
+- **務必妥善保管 JWT Secret**（不要硬編碼、不要提交到版本控制）
+- Token 洩漏時**立即**聯繫 API 提供方輪換 Secret
+- 建議每年主動輪換一次 Secret（可設定提醒）
+- 不使用的 Token 建議主動通知 API 提供方停用
 
 **範例：整合到 Cron Job**
 
