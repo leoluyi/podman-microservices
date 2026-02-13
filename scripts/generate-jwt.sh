@@ -1,7 +1,26 @@
 #!/bin/bash
 # ============================================================================
-# JWT Token 產生腳本（用於測試）
-# 支援不同 Partner 的 JWT Secret
+# JWT Token 產生腳本
+# ============================================================================
+# 用途：產生符合 Partner API 規範的 JWT Token
+#
+# 適用場景：
+# 1. ✅ Partner 在自己的系統中產生 Token（生產環境正確用法）
+# 2. ✅ 開發/測試環境：API 提供方模擬 Partner 行為進行測試
+# 3. ❌ API 提供方幫 Partner 產生 Token（違反安全原則）
+#
+# 安全原則：
+# - 生產環境：只有 Partner 應該使用此腳本產生 Token
+# - API 提供方：只負責「驗證」Token，不負責「產生」Partner 的 Token
+# - 責任分離：Token 由 Partner 產生，確保身份認證的意義
+#
+# 使用方式：
+# 1. 設定環境變數（使用 API 提供方給的 Secret）
+#    export JWT_SECRET_PARTNER_A="your-secret-from-provider"
+# 2. 執行腳本產生 Token
+#    TOKEN=$(./generate-jwt.sh partner-company-a)
+# 3. 使用 Token 呼叫 API
+#    curl -H "Authorization: Bearer $TOKEN" https://api.example.com/partner/api/order/
 # ============================================================================
 
 set -e

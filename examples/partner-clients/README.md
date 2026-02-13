@@ -1,6 +1,28 @@
 # Partner API Client 範例
 
-這些範例展示如何作為 Partner 客戶端使用不同的 JWT Secret 訪問 Partner API。
+這些範例展示如何作為 Partner 在自己的系統中產生 JWT Token 並訪問 Partner API。
+
+## 重要觀念
+
+⚠️ **JWT Token 必須由 Partner 自己產生**
+
+- ✅ **正確**：Partner 在自己的系統中使用 JWT Secret 產生 Token
+- ❌ **錯誤**：向 API 提供方索取現成的 Token
+
+這是基於「責任分離」的安全原則：
+- Token 代表 Partner 的身份認證
+- 由 Partner 自己產生才有認證意義
+- API 提供方只負責「驗證」Token，不負責「產生」Partner 的 Token
+
+## 整合方式選擇
+
+本目錄提供三種整合方式，選擇最適合您的：
+
+| 方式 | 檔案 | 適合場景 | 難度 |
+|------|------|----------|------|
+| **Shell 腳本** | `../../scripts/generate-jwt.sh` | 快速測試、CI/CD、Cron Job | ⭐ 簡單 |
+| **Node.js SDK** | `nodejs-client.js` | Node.js 應用程式 | ⭐⭐ 中等 |
+| **Python SDK** | `python-client.py` | Python 應用程式、資料分析 | ⭐⭐ 中等 |
 
 ## 權限說明
 
@@ -34,6 +56,124 @@ export JWT_SECRET_PARTNER_A="your-secret-from-provider"
 # API 端點
 export API_BASE_URL="https://api.example.com"
 ```
+
+---
+
+## Shell 腳本範例（推薦 - 最簡單）
+
+### 特性
+
+- ✅ 無需安裝額外依賴（只需 `jq`、`openssl`、`base64`）
+- ✅ 快速整合測試
+- ✅ 適合 Shell 腳本、CI/CD Pipeline、Cron Job
+- ✅ 自動產生符合規範的 JWT Token
+
+### 安裝依賴
+
+```bash
+# macOS
+brew install jq
+
+# Ubuntu/Debian
+sudo apt install jq
+
+# CentOS/RHEL
+sudo yum install jq
+```
+
+### 基本使用
+
+```bash
+# 設定環境變數
+export JWT_SECRET_PARTNER_A="your-secret-from-provider"
+
+# 產生 Token
+TOKEN=$(../../scripts/generate-jwt.sh partner-company-a)
+
+# 使用 Token 呼叫 API
+curl -H "Authorization: Bearer $TOKEN" \
+     https://api.example.com/partner/api/order/
+```
+
+### 整合範例：定時同步資料
+
+```bash
+#!/bin/bash
+# sync-orders.sh - 每天同步訂單資料
+
+set -e
+
+# 配置
+PARTNER_ID="partner-company-a"
+API_BASE_URL="https://api.example.com"
+OUTPUT_DIR="/data/orders"
+
+# 產生 JWT Token
+TOKEN=$(../../scripts/generate-jwt.sh "$PARTNER_ID" 2>/dev/null)
+
+# 取得訂單資料
+echo "Fetching orders..."
+curl -s -H "Authorization: Bearer $TOKEN" \
+     "$API_BASE_URL/partner/api/order/" \
+     -o "$OUTPUT_DIR/orders-$(date +%Y%m%d).json"
+
+# 處理資料...
+echo "Orders synced successfully"
+```
+
+### 整合範例：CI/CD Pipeline
+
+```yaml
+# .github/workflows/sync-data.yml
+name: Sync Partner Data
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # 每天凌晨 2 點
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: sudo apt-get install -y jq
+
+      - name: Sync orders
+        env:
+          JWT_SECRET_PARTNER_A: ${{ secrets.JWT_SECRET }}
+          API_BASE_URL: https://api.example.com
+        run: |
+          TOKEN=$(./scripts/generate-jwt.sh partner-company-a 2>/dev/null)
+          curl -H "Authorization: Bearer $TOKEN" \
+               "$API_BASE_URL/partner/api/order/" \
+               -o orders.json
+```
+
+### 腳本特性說明
+
+**輸出格式**：
+- **stdout**：只輸出 JWT Token（方便腳本使用）
+- **stderr**：輸出 Debug 資訊（Partner ID、權限、過期時間、使用範例）
+
+**Token 預設有效期**：24 小時
+
+**範例輸出（stderr）**：
+```
+✓ JWT Token 產生成功
+Partner ID: partner-company-a
+權限: orders:read,write products:read,write users:read
+過期時間: 2026-02-15 10:30:00
+
+使用範例:
+  # Orders API
+  curl -k -H "Authorization: Bearer $TOKEN" https://localhost/partner/api/order/
+  # Products API
+  curl -k -H "Authorization: Bearer $TOKEN" https://localhost/partner/api/product/
+```
+
+---
 
 ## Node.js 範例
 
