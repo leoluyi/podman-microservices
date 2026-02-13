@@ -1,6 +1,28 @@
 # Partner API Client 範例
 
-這些範例展示如何作為 Partner 客戶端使用不同的 JWT Secret 訪問 Partner API。
+這些範例展示如何作為 Partner 在自己的系統中產生 JWT Token 並訪問 Partner API。
+
+## 重要觀念
+
+⚠️ **JWT Token 必須由 Partner 自己產生**
+
+- ✅ **正確**：Partner 在自己的系統中使用 JWT Secret 產生 Token
+- ❌ **錯誤**：向 API 提供方索取現成的 Token
+
+這是基於「責任分離」的安全原則：
+- Token 代表 Partner 的身份認證
+- 由 Partner 自己產生才有認證意義
+- API 提供方只負責「驗證」Token，不負責「產生」Partner 的 Token
+
+## 整合方式選擇
+
+本目錄提供三種整合方式，選擇最適合您的：
+
+| 方式 | 檔案 | 適合場景 | 難度 |
+|------|------|----------|------|
+| **Shell 腳本** | `../../scripts/generate-jwt.sh` | 快速測試、CI/CD、Cron Job | ⭐ 簡單 |
+| **Node.js SDK** | `nodejs-client.js` | Node.js 應用程式 | ⭐⭐ 中等 |
+| **Python SDK** | `python-client.py` | Python 應用程式、資料分析 | ⭐⭐ 中等 |
 
 ## 權限說明
 
@@ -34,6 +56,160 @@ export JWT_SECRET_PARTNER_A="your-secret-from-provider"
 # API 端點
 export API_BASE_URL="https://api.example.com"
 ```
+
+---
+
+## Shell 腳本範例（推薦 - 最簡單）
+
+### 特性
+
+- ✅ 無需安裝額外依賴（只需 `jq`、`openssl`、`base64`）
+- ✅ 快速整合測試
+- ✅ 適合 Shell 腳本、CI/CD Pipeline、Cron Job
+- ✅ 自動產生符合規範的 JWT Token
+
+### 安裝依賴
+
+```bash
+# macOS
+brew install jq
+
+# Ubuntu/Debian
+sudo apt install jq
+
+# CentOS/RHEL
+sudo yum install jq
+```
+
+### 基本使用
+
+```bash
+# 設定環境變數
+export JWT_SECRET_PARTNER_A="your-secret-from-provider"
+
+# 產生 Token（預設永久有效）
+TOKEN=$(../../scripts/generate-jwt.sh partner-company-a)
+
+# 產生 Token（自訂有效期 - 30 天）
+TOKEN=$(../../scripts/generate-jwt.sh partner-company-a 2592000)
+
+# 產生 Token（明確指定永久）
+TOKEN=$(../../scripts/generate-jwt.sh partner-company-a 0)
+
+# 使用 Token 呼叫 API
+curl -H "Authorization: Bearer $TOKEN" \
+     https://api.example.com/partner/api/order/
+```
+
+**有效期參考**：
+- 永久 = 0 或不指定（預設，避免失效問題）
+- 1 天 = 86400
+- 30 天 = 2592000
+- 1 年 = 31536000
+
+### 整合範例：定時同步資料
+
+```bash
+#!/bin/bash
+# sync-orders.sh - 每天同步訂單資料
+
+set -e
+
+# 配置
+PARTNER_ID="partner-company-a"
+API_BASE_URL="https://api.example.com"
+OUTPUT_DIR="/data/orders"
+
+# 產生 JWT Token
+TOKEN=$(../../scripts/generate-jwt.sh "$PARTNER_ID" 2>/dev/null)
+
+# 取得訂單資料
+echo "Fetching orders..."
+curl -s -H "Authorization: Bearer $TOKEN" \
+     "$API_BASE_URL/partner/api/order/" \
+     -o "$OUTPUT_DIR/orders-$(date +%Y%m%d).json"
+
+# 處理資料...
+echo "Orders synced successfully"
+```
+
+### 整合範例：CI/CD Pipeline
+
+```yaml
+# .github/workflows/sync-data.yml
+name: Sync Partner Data
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # 每天凌晨 2 點
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: sudo apt-get install -y jq
+
+      - name: Sync orders
+        env:
+          JWT_SECRET_PARTNER_A: ${{ secrets.JWT_SECRET }}
+          API_BASE_URL: https://api.example.com
+        run: |
+          TOKEN=$(./scripts/generate-jwt.sh partner-company-a 2>/dev/null)
+          curl -H "Authorization: Bearer $TOKEN" \
+               "$API_BASE_URL/partner/api/order/" \
+               -o orders.json
+```
+
+### 腳本特性說明
+
+**輸出格式**：
+- **stdout**：只輸出 JWT Token（方便腳本使用）
+- **stderr**：輸出 Debug 資訊（Partner ID、權限、有效期、過期時間、安全提醒、使用範例）
+
+**Token 預設有效期**：永久（至 2286 年）
+- 避免 Token 突然失效導致服務中斷
+- 降低維運負擔，無需定期更新 Token
+- 仍可透過參數指定短效 Token
+
+**可配置有效期**：支援自訂任意有效期（秒為單位，0 代表永久）
+
+**範例輸出（stderr）- 永久 Token**：
+```
+✓ JWT Token 產生成功
+Partner ID: partner-company-a
+權限: orders:read,write products:read,write users:read
+有效期: 永久（至 2286 年）
+過期時間: Sat Nov 20 17:46:39 2286
+
+⚠️  永久/長效 Token 安全提醒：
+   - 請確保 JWT Secret 安全儲存（不要硬編碼、不要提交到版控）
+   - 建議定期（如每年）主動輪換 Secret
+   - Token 洩漏時請立即聯繫 API 提供方輪換 Secret
+
+使用範例:
+  # Orders API
+  curl -k -H "Authorization: Bearer $TOKEN" https://localhost/partner/api/order/
+  # Products API
+  curl -k -H "Authorization: Bearer $TOKEN" https://localhost/partner/api/product/
+```
+
+**範例輸出（stderr）- 30 天有效期**：
+```
+✓ JWT Token 產生成功
+Partner ID: partner-company-a
+權限: orders:read,write products:read,write users:read
+有效期: 30 天
+過期時間: Fri Mar 14 10:30:00 2026
+
+使用範例:
+  # Orders API
+  curl -k -H "Authorization: Bearer $TOKEN" https://localhost/partner/api/order/
+```
+
+---
 
 ## Node.js 範例
 

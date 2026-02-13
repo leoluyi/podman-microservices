@@ -8,6 +8,42 @@
 local cjson = require "cjson"
 local _M = {}
 
+-- ============================================================================
+-- 安全檢查：防止生產環境使用開發 Secret
+-- ============================================================================
+-- 開發環境的測試 Secret（僅用於開發和測試，禁止用於生產）
+-- WARNING: 這些 Secret 是公開的，任何人都可以用來偽造 JWT Token
+local DEV_SECRETS = {
+    ["dev-secret-partner-a-for-testing-only-32chars"] = true,
+    ["dev-secret-partner-b-for-testing-only-32chars"] = true,
+    ["dev-secret-partner-c-for-testing-only-32chars"] = true,
+    ["dev-secret-partner-a-fallback-32chars"] = true,
+    ["dev-secret-partner-b-fallback-32chars"] = true,
+    ["dev-secret-partner-c-fallback-32chars"] = true,
+}
+
+-- 檢查是否為生產環境
+local function is_production()
+    local env = os.getenv("ENVIRONMENT") or os.getenv("ENV") or "production"
+    return env == "production" or env == "prod"
+end
+
+-- 驗證 Secret 安全性
+local function validate_secret_security(partner_id, secret)
+    if is_production() and DEV_SECRETS[secret] then
+        -- 生產環境使用開發 Secret：嚴重安全問題
+        ngx.log(ngx.EMERG,
+            "SECURITY CRITICAL: Partner ", partner_id, " is using a development secret in production! ",
+            "This allows anyone to forge JWT tokens. ",
+            "Please create a production secret using: ./scripts/manage-partner-secrets.sh create")
+        -- 在生產環境中，拒絕使用開發 Secret
+        error("CRITICAL SECURITY VIOLATION: Development secrets are not allowed in production")
+    elseif DEV_SECRETS[secret] then
+        -- 開發/測試環境使用開發 Secret：記錄警告
+        ngx.log(ngx.WARN, "Partner ", partner_id, " is using a development secret (OK for dev/test only)")
+    end
+end
+
 -- Partner 配置（從環境變數載入）
 -- 權限結構：
 -- permissions = {
@@ -234,6 +270,13 @@ function _M.list_allowed_endpoints(partner_id)
         end
     end
     return result
+end
+
+-- ============================================================================
+-- 初始化：驗證所有 Partner Secret 的安全性
+-- ============================================================================
+for partner_id, config in pairs(_M.partners) do
+    validate_secret_security(partner_id, config.secret)
 end
 
 return _M
