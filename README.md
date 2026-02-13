@@ -76,11 +76,89 @@
 
 ## 快速開始
 
+### 0. 安裝依賴（RHEL 9 / Rocky Linux 9 / AlmaLinux 9）
+
+在執行部署腳本前，需要安裝必要的系統套件：
+
+```bash
+# 更新系統
+sudo dnf update -y
+
+# 安裝 Podman 和容器相關工具
+sudo dnf install -y podman podman-plugins
+
+# 安裝腳本執行所需的工具
+sudo dnf install -y \
+    openssl \
+    jq \
+    curl \
+    git \
+    systemd
+
+# 驗證安裝
+podman --version    # 應該是 4.4+
+systemctl --version # 應該是 250+
+jq --version
+openssl version
+```
+
+**各套件用途說明**：
+
+| 套件 | 用途 | 使用的腳本 |
+|------|------|-----------|
+| **podman** | 容器運行時 | 所有服務部署 |
+| **podman-plugins** | Podman 網路插件 | internal-net 網路設定 |
+| **openssl** | SSL 憑證產生、JWT Secret 產生 | `generate-certs.sh`, `manage-partner-secrets.sh` |
+| **jq** | JSON 處理工具 | `generate-jwt.sh` |
+| **curl** | HTTP 請求工具 | `test-connectivity.sh` |
+| **systemd** | 服務管理（通常已安裝） | Quadlet 服務管理 |
+
+**可選套件**（開發除錯用）：
+
+```bash
+# 安裝額外的除錯工具（可選）
+sudo dnf install -y \
+    bind-utils \
+    net-tools \
+    tcpdump \
+    strace
+```
+
+**啟用 Podman Socket（Quadlet 必需）**：
+
+```bash
+# 啟用 user-level Podman socket
+systemctl --user enable --now podman.socket
+
+# 確認 socket 狀態
+systemctl --user status podman.socket
+
+# 啟用開機自動啟動（讓使用者服務在登入前啟動）
+sudo loginctl enable-linger $(whoami)
+```
+
+**檢查 SELinux 狀態（可選）**：
+
+```bash
+# 檢查 SELinux 模式
+getenforce
+
+# 如果在 Enforcing 模式下遇到權限問題，可以臨時設為 Permissive
+# 警告：生產環境請正確配置 SELinux policy，不要禁用
+sudo setenforce 0  # 臨時設為 Permissive
+
+# 永久設定（修改配置後需重啟）
+# sudo sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config
+```
+
 ### 1. 前置需求
 
-- RHEL 9 / Rocky Linux 9 / AlmaLinux 9
-- Podman 4.4+
-- systemd 250+
+依賴套件已安裝（參考上述步驟 0），確認版本符合：
+
+- ✅ RHEL 9 / Rocky Linux 9 / AlmaLinux 9
+- ✅ Podman 4.4+
+- ✅ systemd 250+
+- ✅ openssl, jq, curl 已安裝
 
 ### 2. 產生自簽憑證
 
