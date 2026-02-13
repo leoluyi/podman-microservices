@@ -37,9 +37,9 @@ PARTNER_ID=$1
 
 # Partner Secret 映射（必須與 ssl-proxy.container 中的一致）
 declare -A PARTNER_SECRETS
-PARTNER_SECRETS["partner-company-a"]=${JWT_SECRET_PARTNER_A:-"dev-secret-partner-a-change-in-production-32chars"}
-PARTNER_SECRETS["partner-company-b"]=${JWT_SECRET_PARTNER_B:-"dev-secret-partner-b-change-in-production-32chars"}
-PARTNER_SECRETS["partner-company-c"]=${JWT_SECRET_PARTNER_C:-"dev-secret-partner-c-change-in-production-32chars"}
+PARTNER_SECRETS["partner-company-a"]=${JWT_SECRET_PARTNER_A:-"dev-secret-partner-a-for-testing-only-32chars"}
+PARTNER_SECRETS["partner-company-b"]=${JWT_SECRET_PARTNER_B:-"dev-secret-partner-b-for-testing-only-32chars"}
+PARTNER_SECRETS["partner-company-c"]=${JWT_SECRET_PARTNER_C:-"dev-secret-partner-c-for-testing-only-32chars"}
 
 # Partner 權限映射
 declare -A PARTNER_PERMISSIONS

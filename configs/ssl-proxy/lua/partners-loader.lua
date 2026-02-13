@@ -21,7 +21,7 @@ local _M = {}
 -- }
 _M.partners = {
     ["partner-company-a"] = {
-        secret = os.getenv("JWT_SECRET_PARTNER_A") or "dev-secret-partner-a-change-in-production-32chars",
+        secret = os.getenv("JWT_SECRET_PARTNER_A") or "dev-secret-partner-a-for-testing-only-32chars",
         name = "Company A Corp",
         -- 完整權限範例
         permissions = {
@@ -60,7 +60,7 @@ _M.partners = {
         }
     },
     ["partner-company-b"] = {
-        secret = os.getenv("JWT_SECRET_PARTNER_B") or "dev-secret-partner-b-change-in-production-32chars",
+        secret = os.getenv("JWT_SECRET_PARTNER_B") or "dev-secret-partner-b-for-testing-only-32chars",
         name = "Company B Ltd",
         -- 僅訂單唯讀
         permissions = {
@@ -76,7 +76,7 @@ _M.partners = {
         }
     },
     ["partner-company-c"] = {
-        secret = os.getenv("JWT_SECRET_PARTNER_C") or "dev-secret-partner-c-change-in-production-32chars",
+        secret = os.getenv("JWT_SECRET_PARTNER_C") or "dev-secret-partner-c-for-testing-only-32chars",
         name = "Company C Inc",
         -- 產品讀寫，但不能刪除
         permissions = {

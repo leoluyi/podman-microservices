@@ -4,6 +4,11 @@
 -- 支援 Endpoint 層級的精細權限控制（API + 路徑 + HTTP 方法）
 -- ============================================================================
 
+-- 依賴模組（由 nginx.conf 的 init_by_lua_block 初始化）
+-- 這些變數必須在 nginx.conf 中設定為全域變數
+local jwt = jwt or require "resty.jwt"
+local partners = partners or require "partners-loader"
+
 local _M = {}
 
 -- 驗證 JWT Token 並返回 Partner ID
@@ -89,15 +94,26 @@ function _M.verify_and_check_endpoint(api, path)
         -- 從完整 URI 中提取路徑部分
         -- 例如：/partner/api/order/list?id=123 -> /list
         local full_uri = ngx.var.request_uri
-        local api_prefix = "/partner/api/" .. string.gsub(api, "s$", "") .. "/"
 
-        -- 移除 API 前綴和查詢字串
-        path = string.gsub(full_uri, "^" .. api_prefix, "/")
-        path = string.gsub(path, "%?.*$", "")
+        -- 構建 API 前綴（將 orders -> order, products -> product, users -> user）
+        local api_singular = string.gsub(api, "s$", "")
+        local api_prefix = "/partner/api/" .. api_singular .. "/"
 
-        -- 如果結果是空字串，設為 "/"
-        if path == "" then
-            path = "/"
+        -- 移除查詢字串
+        local uri_without_query = string.gsub(full_uri, "%?.*$", "")
+
+        -- 使用字串比對而非 pattern matching（避免特殊字元問題）
+        if string.sub(uri_without_query, 1, #api_prefix) == api_prefix then
+            -- 提取 API 前綴之後的路徑
+            path = "/" .. string.sub(uri_without_query, #api_prefix + 1)
+
+            -- 處理空路徑的情況
+            if path == "/" or path == "//" then
+                path = "/"
+            end
+        else
+            -- 如果前綴不匹配，使用整個路徑（不應該發生，但作為後備）
+            path = uri_without_query
         end
     end
 
