@@ -39,6 +39,8 @@ class PartnerAPIClient:
         """
         payload = {
             'sub': self.partner_id,
+            'iss': 'partner-api-system',
+            'aud': 'partner-api',
             'iat': int(time.time()),
             'exp': int(time.time()) + expires_in
         }

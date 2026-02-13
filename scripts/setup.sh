@@ -100,10 +100,10 @@ fi
 info "複製配置檔..."
 
 # SSL Proxy 配置
-cp -r configs/ssl-proxy/* /opt/app/configs/ssl-proxy/
+cp -r "configs/ssl-proxy/"* "/opt/app/configs/ssl-proxy/"
 
 # Frontend 配置
-cp configs/frontend/nginx.conf /opt/app/configs/frontend/
+cp "configs/frontend/nginx.conf" "/opt/app/configs/frontend/"
 
 success "配置檔複製完成"
 
@@ -117,8 +117,8 @@ if [ "$MODE" == "dev" ]; then
 
     # 複製 SSL Proxy 開發環境配置
     mkdir -p ~/.config/containers/systemd/ssl-proxy.container.d
-    cp quadlet/ssl-proxy.container.d/environment.conf.example \
-       ~/.config/containers/systemd/ssl-proxy.container.d/environment.conf
+    cp "quadlet/ssl-proxy.container.d/environment.conf.example" \
+       "$HOME/.config/containers/systemd/ssl-proxy.container.d/environment.conf"
 
     success "已部署開發環境 Partner Secrets"
     info "使用固定測試 Secrets（jwt-secret-partner-a/b/c）"
@@ -201,11 +201,11 @@ APIS=("api-user" "api-order" "api-product")
 
 if [ "$MODE" == "dev" ]; then
     info "啟用 Debug 模式（localhost 端口映射）"
-    
+
     for api in "${APIS[@]}"; do
-        mkdir -p ~/.config/containers/systemd/${api}.container.d
-        cp quadlet/${api}.container.d/environment.conf.example \
-           ~/.config/containers/systemd/${api}.container.d/environment.conf
+        mkdir -p "$HOME/.config/containers/systemd/${api}.container.d"
+        cp "quadlet/${api}.container.d/environment.conf.example" \
+           "$HOME/.config/containers/systemd/${api}.container.d/environment.conf"
         success "  $api: Debug 端口已啟用"
     done
     

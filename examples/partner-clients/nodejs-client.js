@@ -36,6 +36,8 @@ class PartnerAPIClient {
     generateToken(expiresIn = 3600) {
         const payload = {
             sub: this.partnerId,
+            iss: 'partner-api-system',
+            aud: 'partner-api',
             iat: Math.floor(Date.now() / 1000),
             exp: Math.floor(Date.now() / 1000) + expiresIn
         };

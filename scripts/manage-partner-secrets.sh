@@ -164,23 +164,47 @@ rotate_secret() {
         exit 0
     fi
 
+    # 先生成新 Secret 值（確保 openssl 可用）
+    info "生成新 Secret 值..."
+    SECRET_VALUE=$(openssl rand -base64 32)
+    if [ -z "$SECRET_VALUE" ]; then
+        error "生成 Secret 失敗"
+        exit 1
+    fi
+
     # 停止 SSL Proxy
     info "停止 ssl-proxy 服務..."
     systemctl --user stop ssl-proxy 2>/dev/null || warning "ssl-proxy 未運行"
 
     # 刪除舊 Secret
     info "刪除舊 Secret..."
-    podman secret rm $secret_name
+    if ! podman secret rm $secret_name 2>/dev/null; then
+        error "刪除舊 Secret 失敗"
+        # 嘗試重啟服務
+        systemctl --user start ssl-proxy 2>/dev/null
+        exit 1
+    fi
 
-    # 創建新 Secret
+    # 創建新 Secret（使用預先生成的值）
     info "創建新 Secret..."
-    SECRET_VALUE=$(openssl rand -base64 32)
-    echo -n "$SECRET_VALUE" | podman secret create $secret_name -
+    if ! echo -n "$SECRET_VALUE" | podman secret create $secret_name - 2>/dev/null; then
+        error "創建新 Secret 失敗"
+        warning "Secret 值已保存，請手動創建："
+        echo ""
+        echo "  echo -n \"$SECRET_VALUE\" | podman secret create $secret_name -"
+        echo ""
+        exit 1
+    fi
 
     # 重新載入 systemd 並啟動服務
     info "重新啟動 ssl-proxy 服務..."
     systemctl --user daemon-reload
-    systemctl --user start ssl-proxy
+
+    if ! systemctl --user start ssl-proxy; then
+        error "啟動服務失敗"
+        info "請查看日誌: ./scripts/logs.sh ssl-proxy"
+        exit 1
+    fi
 
     # 等待服務啟動
     sleep 2
@@ -190,6 +214,7 @@ rotate_secret() {
     else
         error "Secret 已輪換，但服務啟動失敗"
         info "請查看日誌: ./scripts/logs.sh ssl-proxy"
+        exit 1
     fi
 
     echo ""
@@ -235,17 +260,35 @@ delete_secret() {
     fi
 
     # 停止 SSL Proxy
-    systemctl --user stop ssl-proxy 2>/dev/null || true
+    info "停止 ssl-proxy 服務..."
+    systemctl --user stop ssl-proxy 2>/dev/null || warning "ssl-proxy 未運行"
 
     # 刪除 Secret
-    podman secret rm $secret_name
+    info "刪除 Secret..."
+    if ! podman secret rm $secret_name 2>/dev/null; then
+        error "刪除 Secret 失敗"
+        systemctl --user start ssl-proxy 2>/dev/null
+        exit 1
+    fi
 
     # 重啟服務
+    info "重新啟動 ssl-proxy 服務..."
     systemctl --user daemon-reload
-    systemctl --user start ssl-proxy 2>/dev/null || true
 
-    success "Secret 已刪除: $secret_name"
-    warning "Partner partner-company-$PARTNER_ID 無法再訪問 API"
+    if systemctl --user start ssl-proxy; then
+        sleep 2
+        if systemctl --user is-active --quiet ssl-proxy; then
+            success "Secret 已刪除: $secret_name"
+            warning "Partner partner-company-$PARTNER_ID 無法再訪問 API"
+        else
+            warning "Secret 已刪除，但服務啟動異常"
+            info "請查看日誌: ./scripts/logs.sh ssl-proxy"
+        fi
+    else
+        error "啟動服務失敗"
+        info "請查看日誌: ./scripts/logs.sh ssl-proxy"
+        exit 1
+    fi
 }
 
 # ============================================================================
