@@ -105,18 +105,21 @@ SSL Proxy (OpenResty)
     └─ api-product:8080
 ```
 
-### Dual Authentication Strategy
+### Layered Authentication Strategy
 
 **1. Web/Mobile Apps (via BFF):**
 - Route: `/api/*`
-- SSL Proxy: No auth (just routing)
+- SSL Proxy: Direct proxy to BFF (no authentication)
 - BFF: Session-based authentication (existing mechanism)
 - Use case: Complex user state management
+- Auth responsibility: BFF layer
 
 **2. Partner APIs (direct to backend):**
 - Route: `/partner/api/*`
 - SSL Proxy: JWT validation using OpenResty + Lua (~30-40 lines)
+- Backend: Receives X-Partner-ID header for business logic
 - Use case: Fixed partners with stable auth logic
+- Auth responsibility: SSL Proxy layer
 
 ### Network Isolation
 
@@ -148,9 +151,9 @@ Systemd Quadlet files define container services with `.container` extension:
 OpenResty (Nginx + Lua) configuration:
 - `nginx.conf` - Main config with Lua initialization
 - `conf.d/upstream.conf` - Backend service definitions
-- `conf.d/routes.conf` - Routing rules + JWT validation logic (Web/App + Partner)
+- `conf.d/routes.conf` - Routing rules + JWT validation (Partner API only)
 
-**JWT Validation:** Implemented in `routes.conf` using `access_by_lua_block`. Simple implementation (30-40 lines) for stable partner authentication.
+**JWT Validation:** Implemented in `routes.conf` using `access_by_lua_block` for `/partner/api/*` routes only. Simple implementation (30-40 lines) for stable partner authentication. Web/App API (`/api/*`) is proxied directly to BFF without JWT validation.
 
 ### Environment Variables
 
@@ -280,8 +283,20 @@ cd ../..
 ./scripts/logs.sh api-user
 ```
 
-### Test Partner API Integration
+### Test API Endpoints
 
+**Web/App API (via BFF):**
+```bash
+# Login to get session
+curl -k -X POST https://localhost/api/login \
+     -d '{"username":"user","password":"pass"}' \
+     -c cookies.txt
+
+# Access API with session
+curl -k https://localhost/api/orders -b cookies.txt
+```
+
+**Partner API (JWT validation at SSL Proxy):**
 ```bash
 # 1. Generate JWT token
 TOKEN=$(./scripts/generate-jwt.sh partner-company-a)

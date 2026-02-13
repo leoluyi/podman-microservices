@@ -49,7 +49,7 @@
 ### 核心特性
 
 - ✅ **統一 SSL 終止**：憑證只需掛載一處
-- ✅ **Partner JWT 驗證**：簡化的 OpenResty/Lua 實作
+- ✅ **分層認證機制**：SSL Proxy 只驗證 Partner JWT，BFF 處理 Session
 - ✅ **完全網路隔離**：Backend APIs 在 internal-net
 - ✅ **內部 HTTP 通訊**：簡化配置，提升效能
 - ✅ **混合 Debug 模式**：開發環境可開啟 localhost 訪問
@@ -79,13 +79,13 @@
 SSL Proxy (OpenResty)
 ├─ SSL 終止              ✅ 專注網路層
 ├─ 反向代理              ✅ 專注網路層
-├─ Partner JWT 驗證      ✅ 簡化實作（30-40 行 Lua）
-└─ 路由分發              ✅ 專注網路層
+├─ Partner JWT 驗證      ✅ 只驗證 /partner/api/*
+└─ 路由分發              ✅ /api/* 直接轉發給 BFF
 
 BFF (Node.js/Java)
-├─ Session 認證          ✅ 既有機制
-├─ Web/App API 處理      ✅ 應用層
-└─ API 聚合              ✅ 應用層
+├─ Session 認證          ✅ 處理 /api/* 認證
+├─ Web/App API 處理      ✅ 應用層邏輯
+└─ API 聚合              ✅ 聚合 Backend APIs
 
 Backend APIs
 └─ 業務邏輯              ✅ 專注業務
@@ -509,8 +509,8 @@ public OrderResponse getOrders(
 
 **職責：**
 - SSL/TLS 終止
-- Partner JWT 驗證（簡化 Lua）
-- 路由分發
+- Partner JWT 驗證（只針對 `/partner/api/*`）
+- 路由分發（`/api/*` 直接轉發給 BFF）
 - 安全 Headers 設定
 
 **關鍵配置：**

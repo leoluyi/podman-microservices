@@ -70,32 +70,20 @@ test_endpoint "前端首頁" "https://localhost/"
 
 echo ""
 
-# 3. JWT Token 測試
-info "=== API 端點 (JWT Token) ==="
+# 3. Web/App API 測試（由 BFF 處理認證）
+info "=== Web/App API (轉發至 BFF) ==="
+info "注意：SSL Proxy 不驗證 /api/* 端點，認證由 BFF 處理"
 
-# 產生測試 Token
-if [ -f "./scripts/generate-jwt.sh" ]; then
-    TOKEN=$(./scripts/generate-jwt.sh test-user 2>/dev/null || echo "")
-else
-    warn "generate-jwt.sh 不存在，跳過 JWT 測試"
-    TOKEN=""
-fi
-
-if [ -n "$TOKEN" ]; then
-    test_endpoint "API (有效 Token)" "https://localhost/api/users" 200 "-H 'Authorization: Bearer $TOKEN'"
-else
-    test_endpoint "API (無 Token)" "https://localhost/api/users" 401
-fi
-
-test_endpoint "API (無 Token，預期失敗)" "https://localhost/api/users" 401
+# 測試端點可達性（BFF 應該返回 401 或其他認證錯誤）
+test_endpoint "API 可達性測試" "https://localhost/api/users" 401
 
 echo ""
 
-# 4. Partner API 測試（JWT Token）
-info "=== Partner API (JWT Token) ==="
+# 4. Partner API 測試（SSL Proxy 的 JWT 驗證）
+info "=== Partner API (JWT Token 驗證) ==="
 
-if [ -n "$TOKEN" ]; then
-    # 產生 Partner JWT Token
+# 產生 Partner JWT Token
+if [ -f "./scripts/generate-jwt.sh" ]; then
     PARTNER_TOKEN=$(./scripts/generate-jwt.sh partner-company-a 2>/dev/null || echo "")
 
     if [ -n "$PARTNER_TOKEN" ]; then
@@ -110,7 +98,7 @@ if [ -n "$TOKEN" ]; then
         warn "無法產生 Partner Token，跳過 Partner JWT 測試"
     fi
 else
-    warn "跳過 Partner API 測試（無法產生 Token）"
+    warn "generate-jwt.sh 不存在，跳過 Partner API 測試"
 fi
 
 test_endpoint "Partner API (無 Token，預期失敗)" \

@@ -31,7 +31,7 @@
 ## 核心特性
 
 - ✅ **統一 SSL 終止**：憑證只需掛載一處
-- ✅ **統一 JWT 驗證**：集中驗證 Web/App 和 Partner API
+- ✅ **分層認證機制**：BFF 處理 Session，SSL Proxy 驗證 Partner JWT
 - ✅ **完全網路隔離**：Backend APIs 在 internal-net
 - ✅ **內部 HTTP 通訊**：簡化配置，提升效能
 - ✅ **獨立更新部署**：每個服務獨立容器
@@ -122,12 +122,16 @@
 # 前端（不需驗證）
 curl -k https://localhost/
 
-# Web/App API（需要 JWT Token）
-TOKEN=$(./scripts/generate-jwt.sh test-user)
-curl -k -H "Authorization: Bearer $TOKEN" \
-     https://localhost/api/users
+# Web/App API（由 BFF 處理 Session 認證）
+# 先登入取得 Session
+curl -k -X POST https://localhost/api/login \
+     -d '{"username":"user","password":"pass"}' \
+     -c cookies.txt
 
-# Partner API（需要 JWT Token）
+# 使用 Session 訪問 API
+curl -k https://localhost/api/orders -b cookies.txt
+
+# Partner API（SSL Proxy 驗證 JWT Token）
 PARTNER_TOKEN=$(./scripts/generate-jwt.sh partner-company-a)
 curl -k -H "Authorization: Bearer $PARTNER_TOKEN" \
      https://localhost/partner/api/order/
@@ -377,8 +381,8 @@ Environment=JWT_SECRET=your-super-secret-random-string-at-least-32-chars
 
 測試項目：
 - ✅ SSL Proxy 可訪問
-- ✅ Web/App JWT Token 驗證
-- ✅ Partner JWT Token 驗證
+- ✅ Web/App API 路由（BFF Session 認證）
+- ✅ Partner JWT Token 驗證（SSL Proxy 層）
 - ✅ Backend APIs 完全隔離（生產模式）
 - ✅ 容器間通訊正常
 
