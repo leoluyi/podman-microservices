@@ -32,13 +32,11 @@ Environment=SERVICE_NAME=api-user
 Environment=SERVICE_PORT=8080
 Environment=ENVIRONMENT=production
 
-# 資料庫連線
-Environment=DB_HOST=your-db-host.example.com
-Environment=DB_PORT=5432
-Environment=DB_NAME=userdb
-
 # Java 應用程式設定（如適用）
 # Environment=JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC
+
+# 資料庫連線由 environment.conf 提供（dev/prod 分開管理）
+# 請複製 api-user.container.d/environment.conf.example 並填入實際值
 
 # ============================================================================
 # Volume 掛載

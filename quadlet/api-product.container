@@ -27,10 +27,8 @@ Environment=SERVICE_NAME=api-product
 Environment=SERVICE_PORT=8080
 Environment=ENVIRONMENT=production
 
-# 資料庫連線
-Environment=DB_HOST=your-db-host.example.com
-Environment=DB_PORT=5432
-Environment=DB_NAME=productdb
+# 資料庫連線由 environment.conf 提供（dev/prod 分開管理）
+# 請複製 api-product.container.d/environment.conf.example 並填入實際值
 
 # ============================================================================
 # 健康檢查

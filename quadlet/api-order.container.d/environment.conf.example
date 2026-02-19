@@ -1,4 +1,14 @@
-# Debug 模式環境變數覆蓋 - API Order
+# 環境變數覆蓋 - API Order
+# 使用方式：
+#   開發環境 - ./scripts/setup.sh dev（自動啟用）
+#   生產環境 - 手動複製此檔並填入正確值，部署至：
+#              ~/.config/containers/systemd/api-order.container.d/environment.conf
 
 [Container]
+# Debug 端口（開發環境，只綁定 localhost）
 Environment=DEBUG_PORT_8102=127.0.0.1:8102:8080
+
+# 資料庫連線（必填）
+Environment=DB_HOST=your-db-host.example.com
+Environment=DB_PORT=5432
+Environment=DB_NAME=orderdb
