@@ -1,22 +1,14 @@
-# ============================================================================
-# Debug 模式環境變數覆蓋 - API User
-# ============================================================================
-# 用途：開發/測試環境啟用 localhost 訪問
-#
+# 環境變數覆蓋 - API User
 # 使用方式：
-# 1. 開發環境：./scripts/setup.sh dev（會自動啟用）
-# 2. 生產環境：./scripts/setup.sh prod（會自動禁用）
-#
-# 效果：
-# - 開發模式：可透過 http://localhost:8101 直接訪問此 API
-# - 生產模式：完全隔離，無法從主機訪問
-# ============================================================================
+#   開發環境 - ./scripts/setup.sh dev（自動啟用）
+#   生產環境 - 手動複製此檔並填入正確值，部署至：
+#              ~/.config/containers/systemd/api-user.container.d/environment.conf
 
 [Container]
-# 開啟 Debug 端口（只綁定 localhost，安全）
+# Debug 端口（開發環境，只綁定 localhost）
 Environment=DEBUG_PORT_8101=127.0.0.1:8101:8080
 
-# 可選：開發環境特定設定
-# Environment=LOG_LEVEL=debug
-# Environment=ENABLE_DEBUG_MODE=true
-# Environment=CORS_ENABLED=true
+# 資料庫連線（必填）
+Environment=DB_HOST=your-db-host.example.com
+Environment=DB_PORT=5432
+Environment=DB_NAME=userdb

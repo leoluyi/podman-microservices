@@ -5,12 +5,7 @@
 
 set -e
 
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-info() { echo -e "${BLUE}[INFO]${NC} $1"; }
-success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+source "$(dirname "$0")/lib.sh"
 
 info "啟動所有微服務..."
 
@@ -28,14 +23,11 @@ SERVICES=(
 for service in "${SERVICES[@]}"; do
     info "啟動 $service..."
     systemctl --user start "$service"
-    
-    # 等待服務啟動
-    sleep 2
-    
-    if systemctl --user is-active --quiet "$service"; then
+
+    if wait_for_service "$service" 30; then
         success "  ✓ $service 已啟動"
     else
-        echo "  ✗ $service 啟動失敗"
+        error "  ✗ $service 啟動失敗"
         echo "  查看日誌: systemctl --user status $service"
     fi
 done

@@ -6,16 +6,7 @@
 
 set -e
 
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-info() { echo -e "${BLUE}[INFO]${NC} $1"; }
-success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
-error() { echo -e "${RED}[ERROR]${NC} $1"; }
-warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
+source "$(dirname "$0")/lib.sh"
 
 usage() {
     echo "Partner Secrets 管理工具"
@@ -206,10 +197,7 @@ rotate_secret() {
         exit 1
     fi
 
-    # 等待服務啟動
-    sleep 2
-
-    if systemctl --user is-active --quiet ssl-proxy; then
+    if wait_for_service ssl-proxy 30; then
         success "Secret 已輪換，服務運行正常"
     else
         error "Secret 已輪換，但服務啟動失敗"
@@ -275,19 +263,14 @@ delete_secret() {
     info "重新啟動 ssl-proxy 服務..."
     systemctl --user daemon-reload
 
-    if systemctl --user start ssl-proxy; then
-        sleep 2
-        if systemctl --user is-active --quiet ssl-proxy; then
-            success "Secret 已刪除: $secret_name"
-            warning "Partner partner-company-$PARTNER_ID 無法再訪問 API"
-        else
-            warning "Secret 已刪除，但服務啟動異常"
-            info "請查看日誌: ./scripts/logs.sh ssl-proxy"
-        fi
+    systemctl --user start ssl-proxy || { error "啟動服務失敗"; info "請查看日誌: ./scripts/logs.sh ssl-proxy"; exit 1; }
+
+    if wait_for_service ssl-proxy 30; then
+        success "Secret 已刪除: $secret_name"
+        warning "Partner partner-company-$PARTNER_ID 無法再訪問 API"
     else
-        error "啟動服務失敗"
+        warning "Secret 已刪除，但服務啟動異常"
         info "請查看日誌: ./scripts/logs.sh ssl-proxy"
-        exit 1
     fi
 }
 

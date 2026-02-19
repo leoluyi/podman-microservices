@@ -5,16 +5,13 @@
 
 set -e
 
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
+source "$(dirname "$0")/lib.sh"
 
-info() { echo -e "${BLUE}[TEST]${NC} $1"; }
+# 測試腳本專用 prefix（覆蓋 lib.sh 的標準函數）
+info()    { echo -e "${BLUE}[TEST]${NC} $1"; }
 success() { echo -e "${GREEN}[PASS]${NC} $1"; }
-fail() { echo -e "${RED}[FAIL]${NC} $1"; }
-warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+fail()    { echo -e "${RED}[FAIL]${NC} $1"; }
+warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
 
 PASSED=0
 FAILED=0
