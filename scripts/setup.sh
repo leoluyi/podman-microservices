@@ -254,6 +254,25 @@ if [ ${#MISSING_IMAGES[@]} -gt 0 ]; then
     info "  修改 quadlet/*.container 中的 Image 為 nginx:alpine"
 fi
 
+# ssl-proxy 使用 upstream OpenResty image（無需 build，但需確保 image 存在）
+OPENRESTY_IMAGE="docker.io/openresty/openresty:alpine"
+if ! podman image exists "$OPENRESTY_IMAGE"; then
+    warning "  ssl-proxy 所需鏡像不存在: $OPENRESTY_IMAGE"
+    info "連網環境請執行："
+    echo ""
+    echo "  podman pull $OPENRESTY_IMAGE"
+    echo ""
+    info "離線環境請在連網機匯出後搬移至本機："
+    echo ""
+    echo "  # 連網機"
+    echo "  podman save $OPENRESTY_IMAGE -o openresty-alpine.tar"
+    echo "  # 離線機"
+    echo "  podman load -i openresty-alpine.tar"
+    echo ""
+else
+    success "  ssl-proxy 鏡像存在: $OPENRESTY_IMAGE"
+fi
+
 # ============================================================================
 # 10. 顯示後續步驟
 # ============================================================================

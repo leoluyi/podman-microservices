@@ -236,9 +236,14 @@ podman-microservices/
 │   ├── images.env                     # 容器鏡像定義
 │   ├── ssl-proxy/                     # SSL Proxy 配置
 │   │   ├── nginx.conf                 # 主配置（OpenResty + Lua）
-│   │   └── conf.d/
-│   │       ├── upstream.conf          # Backend 服務定義
-│   │       └── routes.conf            # 路由 + JWT 驗證（Web/App + Partner）
+│   │   ├── conf.d/
+│   │   │   ├── upstream.conf          # Backend 服務定義
+│   │   │   └── routes.conf            # 路由 + JWT 驗證（Web/App + Partner）
+│   │   └── lua/                       # Lua 模組
+│   │       ├── partner-auth.lua       # JWT 驗證邏輯
+│   │       └── partners-loader.lua    # Partner 設定載入
+│   ├── bff/                           # BFF 佔位配置
+│   │   └── nginx.conf                 # 監聽 8080 的佔位 Nginx（快速測試用）
 │   └── frontend/                      # Frontend 配置
 │       └── nginx.conf                 # Frontend Nginx 配置
 │
@@ -337,16 +342,21 @@ curl -k -H "Authorization: Bearer $TOKEN" \
 專案包含使用 SUSE BCI 的 Dockerfile 範例：
 
 ```bash
-# 建置 API 服務
-cd dockerfiles/api-user
-podman build -t localhost/api-user:latest .
-
-# 建置所有服務
+# 建置所有後端與前端服務
 for service in api-user api-order api-product bff frontend; do
     cd dockerfiles/$service
     podman build -t localhost/$service:latest .
     cd ../..
 done
+```
+
+> **注意**：`ssl-proxy` 直接使用 upstream OpenResty image（`docker.io/openresty/openresty:alpine`），**不需要自訂 build**。Quadlet 啟動時會自動 pull；離線環境請參考下方「映像管理」章節預先匯入。
+
+**BFF 佔位測試**：若暫時以 `nginx:alpine` 作為 BFF 佔位 image，需掛載 `configs/bff/nginx.conf` 以確保監聽正確的 8080 port：
+
+```bash
+# quadlet/bff.container 加入：
+# Volume=/opt/app/configs/bff/nginx.conf:/etc/nginx/nginx.conf:ro
 ```
 
 ## 常用操作
@@ -599,18 +609,43 @@ podman info | grep -E 'rootless|networkBackend|graphDriverName'
 
 ### 映像管理（離線環境）
 
-離線環境無法 `podman pull`，需透過以下流程：
+離線環境無法 `podman pull`，需在連網機預先匯出所有 images 後搬移至離線機。
+
+**需要匯出的 images**：
+
+| Image | 用途 |
+|-------|------|
+| `docker.io/openresty/openresty:alpine` | ssl-proxy（upstream，無需 build） |
+| `docker.io/library/nginx:alpine` | frontend、bff 佔位 |
+| `localhost/api-user:latest` | API-User 服務 |
+| `localhost/api-order:latest` | API-Order 服務 |
+| `localhost/api-product:latest` | API-Product 服務 |
 
 ```bash
-# 連網機：匯出映像
-podman pull docker.io/nginx:alpine
-podman save -o nginx-alpine.tar docker.io/nginx:alpine
-sha256sum nginx-alpine.tar > nginx-alpine.tar.sha256
+# 連網機：pull 並匯出所有 images
+mkdir -p /tmp/podman-images
 
-# 傳輸後，離線機：匯入映像
-sha256sum -c nginx-alpine.tar.sha256
-podman load -i nginx-alpine.tar
+podman pull docker.io/openresty/openresty:alpine
+podman save docker.io/openresty/openresty:alpine -o /tmp/podman-images/openresty-alpine.tar
+
+podman pull docker.io/library/nginx:alpine
+podman save docker.io/library/nginx:alpine -o /tmp/podman-images/nginx-alpine.tar
+
+for svc in api-user api-order api-product; do
+    podman save localhost/${svc}:latest -o /tmp/podman-images/${svc}-latest.tar
+done
+
+# 打包
+tar czf podman-images.tgz /tmp/podman-images/
+
+# 離線機：解壓並匯入
+tar xzf podman-images.tgz
+for tar_file in podman-images/*.tar; do
+    podman load -i "${tar_file}"
+done
 ```
+
+完整的匯出/匯入 SOP（含校驗碼驗證）：參考[離線部署指南 §6](docs/podman_rootless_min_offline_repo_rhel97_v3.md)。
 
 ### 完整文件
 
@@ -640,4 +675,4 @@ MIT License
 
 ---
 
-**最後更新：2026-02-13**
+**最後更新：2026-03-02**

@@ -17,6 +17,8 @@
 
 ### 權限矩陣
 
+> **注意**：以下為概念性摘要，使用舊的 API 層級表示法。實際權限設定採用 **Endpoint 層級模型**，格式為 `endpoints = { { pattern, methods } }`。詳見 [ENDPOINT-PERMISSIONS.md](./ENDPOINT-PERMISSIONS.md)。
+
 | Partner | Orders API | Products API | Users API |
 |---------|-----------|--------------|-----------|
 | partner-company-a | read, write | read, write | read |
@@ -129,17 +131,31 @@
 _M.partners = {
     -- 現有 Partners...
 
-    -- 新增 Partner
+    -- 新增 Partner（Endpoint 層級權限格式）
     ["partner-company-d"] = {
         secret = os.getenv("JWT_SECRET_PARTNER_D") or "dev-secret-partner-d-change-in-production-32chars",
         name = "Company D Technologies",
         permissions = {
-            orders = { "read" },           -- 只能讀取訂單
-            products = { "read", "write" }  -- 可讀寫產品
+            orders = {
+                endpoints = {
+                    { pattern = "/list", methods = {"GET"} },
+                    { pattern = "/search", methods = {"GET"} },
+                    { pattern = "^/%d+$", methods = {"GET"}, regex = true }
+                }
+            },
+            products = {
+                endpoints = {
+                    { pattern = "/", methods = {"GET"} },
+                    { pattern = "/create", methods = {"POST"} },
+                    { pattern = "^/%d+$", methods = {"GET", "PUT", "PATCH"}, regex = true }
+                }
+            }
         }
     }
 }
 ```
+
+> 完整格式說明見 [ENDPOINT-PERMISSIONS.md](./ENDPOINT-PERMISSIONS.md)。
 
 #### 步驟 2：配置 Secret（混合方案）
 
@@ -199,96 +215,33 @@ systemctl --user restart ssl-proxy
 
 ### 2. 權限說明
 
-#### 權限類型
+> **已升級**：實際實作採用 Endpoint 層級權限控制，支援精確的路徑與 HTTP 方法匹配。下方為概念說明，完整設定格式見 [ENDPOINT-PERMISSIONS.md](./ENDPOINT-PERMISSIONS.md)。
+
+#### 權限類型（概念）
 
 - **read**：允許 GET 請求
 - **write**：允許 POST, PUT, PATCH 請求
 - **delete**：允許 DELETE 請求
 
-#### 配置範例
+#### 實際配置格式（Endpoint 層級）
 
 ```lua
 permissions = {
-    orders = { "read", "write" },  -- GET, POST, PUT, PATCH
-    products = { "read" },          -- 只有 GET
-    users = { "read", "delete" }    -- GET 和 DELETE
+    orders = {
+        endpoints = {
+            { pattern = "/list", methods = {"GET"} },
+            { pattern = "/create", methods = {"POST"} },
+            { pattern = "^/%d+$", methods = {"GET", "PUT", "PATCH"}, regex = true }
+        }
+    }
 }
 ```
 
-#### HTTP 方法映射
-
-系統自動根據 HTTP 方法判斷所需權限：
-
-| HTTP 方法 | 需要權限 |
-|-----------|----------|
-| GET | read |
-| POST | write |
-| PUT | write |
-| PATCH | write |
-| DELETE | delete |
+詳細格式與範例見 [ENDPOINT-PERMISSIONS.md](./ENDPOINT-PERMISSIONS.md)。
 
 ### 3. 管理 Partner Secrets
 
-本專案使用**混合管理方案**：
-- **開發環境**：固定測試 Secret（環境檔案）
-- **生產環境**：Podman Secrets（加密存儲）
-
-#### 生產環境：使用 Podman Secrets（推薦）
-
-**創建新 Partner Secret**：
-
-```bash
-# 互動式創建（會自動產生隨機 Secret）
-./scripts/manage-partner-secrets.sh create a
-
-# 輸出範例：
-# Partner ID: partner-company-a
-# JWT Secret: rJ9kL2mN4oP6qR8sT0uV1wX3yZ5aB7cD9eF1gH3iJ5kL7
-```
-
-**查看現有 Secrets**：
-
-```bash
-# 列出所有 Partner Secrets
-./scripts/manage-partner-secrets.sh list
-
-# 查看特定 Secret 詳細資訊（不含實際值）
-./scripts/manage-partner-secrets.sh show a
-```
-
-**輪換 Secret（安全更新）**：
-
-```bash
-# 停用舊 Token 並產生新 Secret
-./scripts/manage-partner-secrets.sh rotate a
-
-# ⚠️ 注意：會立即停用所有使用舊 Secret 的 Token
-```
-
-**刪除 Partner**：
-
-```bash
-# 刪除 Secret（Partner 將無法訪問）
-./scripts/manage-partner-secrets.sh delete c
-```
-
-#### 開發環境：使用環境檔案
-
-開發模式已預設固定測試 Secret（由 `setup.sh dev` 自動配置）：
-
-```bash
-# setup.sh dev 會自動部署
-JWT_SECRET_PARTNER_A=dev-secret-partner-a-for-testing-only-32chars
-JWT_SECRET_PARTNER_B=dev-secret-partner-b-for-testing-only-32chars
-JWT_SECRET_PARTNER_C=dev-secret-partner-c-for-testing-only-32chars
-```
-
-**手動生成隨機 Secret**：
-
-```bash
-# 如需自訂，可手動生成
-openssl rand -base64 32
-```
+create / list / rotate / delete 的完整操作說明見 [DEPLOYMENT.md § Partner API 管理](./DEPLOYMENT.md)。
 
 ### 4. 提供資訊給 Partner
 
@@ -384,14 +337,13 @@ API Base URL: https://api.example.com
 
 文檔與支援
 ---------
-- 整合指南: https://github.com/your-org/repo/docs/PARTNER-INTEGRATION.md
-- API 參考: https://api.example.com/docs
-- 範例程式碼: https://github.com/your-org/repo/tree/main/examples/partner-clients
+- 整合指南: `docs/PARTNER-INTEGRATION.md`
+- API 參考: `{由 API 提供方提供}`
+- 範例程式碼: `examples/partner-clients/`
 
 技術支援
 --------
-- Email: partner-support@example.com
-- Slack: #partner-api-support
+- Email: `{由 API 提供方提供}`
 - 工作時間: 週一至週五 09:00-18:00 (GMT+8)
 ```
 

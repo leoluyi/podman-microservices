@@ -416,7 +416,85 @@ podman run --rm <image-name> echo "rootless podman works"
 
 ---
 
-## 6. 常見錯誤對照表
+## 6. 容器 Image 離線搬移
+
+本章說明如何在連網機預先匯出 microservices 所需的所有容器 image，並於離線機匯入。
+
+### 6.1 需要預先匯出的 Images
+
+| Image | 用途 | 備註 |
+|-------|------|------|
+| `docker.io/openresty/openresty:alpine` | ssl-proxy | 直接使用 upstream image，無需自訂 build |
+| `docker.io/library/nginx:alpine` | frontend、bff（佔位） | 開發/測試用佔位；正式部署替換為實際 image |
+| `localhost/api-user:latest` | API-User 服務 | 需先在連網機 build |
+| `localhost/api-order:latest` | API-Order 服務 | 需先在連網機 build |
+| `localhost/api-product:latest` | API-Product 服務 | 需先在連網機 build |
+
+### 6.2 連網機：匯出所有 Images
+
+```bash
+# 建立匯出目錄
+mkdir -p /tmp/podman-images
+
+# Upstream images（直接 pull 後 save）
+podman pull docker.io/openresty/openresty:alpine
+podman save docker.io/openresty/openresty:alpine \
+    -o /tmp/podman-images/openresty-alpine.tar
+
+podman pull docker.io/library/nginx:alpine
+podman save docker.io/library/nginx:alpine \
+    -o /tmp/podman-images/nginx-alpine.tar
+
+# 自建 images（先 build 再 save）
+# 依實際 dockerfiles 路徑調整
+for svc in api-user api-order api-product; do
+    podman save localhost/${svc}:latest \
+        -o /tmp/podman-images/${svc}-latest.tar
+done
+
+# 產生清單與校驗碼
+ls /tmp/podman-images/*.tar | while read f; do
+    sha256sum "$f"
+done > /tmp/podman-images/images.sha256
+
+cat /tmp/podman-images/images.sha256
+```
+
+### 6.3 離線機：匯入 Images
+
+```bash
+# 驗證檔案完整性
+cd /path/to/transferred/images
+sha256sum -c images.sha256
+
+# 載入所有 images
+for tar_file in *.tar; do
+    echo "Loading ${tar_file}..."
+    podman load -i "${tar_file}"
+done
+
+# 確認 images 已載入
+podman images
+```
+
+**檢查點**：`podman images` 應顯示所有上述 images。
+
+### 6.4 打包傳輸
+
+```bash
+# 連網機：打包
+cd /tmp
+tar czf podman-images.tgz podman-images/
+sha256sum podman-images.tgz > podman-images.tgz.sha256
+
+# 離線機：解壓後按 §6.3 匯入
+sha256sum -c podman-images.tgz.sha256
+tar xzf podman-images.tgz
+```
+
+---
+
+## 7. 常見錯誤對照表
 
 | # | 現象 | 可能原因 | 解法 |
 |---|------|----------|------|
@@ -433,11 +511,11 @@ podman run --rm <image-name> echo "rootless podman works"
 
 ---
 
-## 7. 回滾與移除程序
+## 8. 回滾與移除程序
 
 如需完整移除 Podman 及相關設定：
 
-### 7.1 停止所有容器並清除資料
+### 8.1 停止所有容器並清除資料
 
 ```bash
 # 以 appuser 身分執行
@@ -448,7 +526,7 @@ podman system reset --force
 exit
 ```
 
-### 7.2 移除套件
+### 8.2 移除套件
 
 ```bash
 sudo dnf remove -y \
@@ -461,7 +539,7 @@ sudo dnf remove -y \
 
 > **注意**：`shadow-utils`、`iptables-nft`、`nftables`、`iproute`、`procps-ng` 為系統基礎套件，**請勿移除**。
 
-### 7.3 清除 Repo 與設定
+### 8.3 清除 Repo 與設定
 
 ```bash
 sudo rm -f /etc/yum.repos.d/podman-offline.repo
@@ -470,7 +548,7 @@ sudo rm -f /etc/sysctl.d/99-userns.conf
 sudo sysctl --system
 ```
 
-### 7.4 清除使用者資料（視需求）
+### 8.4 清除使用者資料（視需求）
 
 ```bash
 sudo userdel -r appuser    # -r 會一併刪除 home 目錄
@@ -479,7 +557,7 @@ sudo sed -i '/^appuser:/d' /etc/subuid /etc/subgid
 
 ---
 
-## 8. 維運建議
+## 9. 維運建議
 
 1. **更新策略**：每次更新一律建立新目錄、新 tarball，避免就地覆蓋造成半更新狀態。
 2. **RPM 白名單**：維護固定的套件清單文件（如本手冊 §1），方便稽核與重建。

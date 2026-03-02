@@ -230,15 +230,7 @@ PublishPort=127.0.0.1:8101:8080
 
 ### 防火牆設定
 
-```bash
-# 生產環境：只開放 80 和 443
-sudo firewall-cmd --permanent --add-port=443/tcp
-sudo firewall-cmd --permanent --add-port=80/tcp
-sudo firewall-cmd --reload
-
-# 驗證
-sudo firewall-cmd --list-ports
-```
+生產環境只需開放 80 和 443。設定步驟見 [DEPLOYMENT.md § 防火牆設定](./DEPLOYMENT.md)。
 
 **不需要開放的端口：**
 - 8080（BFF，內部訪問）

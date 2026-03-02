@@ -1,8 +1,8 @@
 [Unit]
 Description=Frontend Service (HTTP only, behind SSL Proxy)
 Documentation=https://github.com/your-org/frontend
-After=ssl-proxy.service
-Wants=ssl-proxy.service
+After=internal-net.service
+Requires=internal-net.service
 
 [Container]
 # ============================================================================

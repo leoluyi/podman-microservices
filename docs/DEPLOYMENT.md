@@ -20,13 +20,22 @@ cd podman-microservices
 ### 2. 建置容器鏡像
 
 ```bash
-# 建置所有服務
+# 建置後端 API 服務與前端
 for service in api-user api-order api-product bff frontend; do
     cd dockerfiles/$service
     podman build -t localhost/$service:latest .
     cd ../..
 done
 ```
+
+> **注意**：`ssl-proxy` 使用 upstream OpenResty image，由 Quadlet 在啟動時直接 pull，**不需要自訂 build**。
+> 離線環境請事先執行 `podman pull docker.io/openresty/openresty:alpine` 並搬移至目標機器：
+> ```bash
+> # 連網機：匯出
+> podman save docker.io/openresty/openresty:alpine -o openresty-alpine.tar
+> # 離線機：匯入
+> podman load -i openresty-alpine.tar
+> ```
 
 ### 3. 初始化環境（開發模式）
 
