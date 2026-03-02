@@ -23,25 +23,30 @@ test_endpoint() {
     local name=$1
     local url=$2
     local expected_code=${3:-200}
-    local extra_args=${4:-""}
+    local auth_header=${4:-""}
 
     info "測試 $name: $url"
 
-    if response=$(curl -k -s -w "\n%{http_code}" --max-time 10 $extra_args "$url" 2>&1); then
+    local -a curl_args=(-k -s -w "\n%{http_code}" --max-time 10)
+    if [ -n "$auth_header" ]; then
+        curl_args+=(-H "$auth_header")
+    fi
+
+    if response=$(curl "${curl_args[@]}" "$url" 2>&1); then
         http_code=$(echo "$response" | tail -n 1)
         body=$(echo "$response" | sed '$d')
-        
-        if [ "$http_code" == "$expected_code" ]; then
+
+        if [ "$http_code" = "$expected_code" ]; then
             success "  HTTP $http_code ✓"
-            ((PASSED++))
+            ((++PASSED))
         else
             fail "  HTTP $http_code (期望 $expected_code) ✗"
             echo "  回應: $body"
-            ((FAILED++))
+            ((++FAILED))
         fi
     else
         fail "  連線失敗 ✗"
-        ((FAILED++))
+        ((++FAILED))
     fi
 }
 
@@ -82,51 +87,51 @@ info "=== Partner API (JWT Token 驗證 + 權限) ==="
 if [ -f "./scripts/generate-jwt.sh" ]; then
     # 測試 Partner A（有完整權限）
     info "測試 Partner A (完整權限)..."
-    if PARTNER_A_TOKEN=$(./scripts/generate-jwt.sh partner-company-a 2>&1); then
+    if PARTNER_A_TOKEN=$(./scripts/generate-jwt.sh partner-company-a 2>/dev/null); then
         # Token 生成成功
         test_endpoint "Partner A: Orders API (有權限)" \
             "https://localhost/partner/api/order/" 200 \
-            "-H 'Authorization: Bearer $PARTNER_A_TOKEN'"
+            "Authorization: Bearer $PARTNER_A_TOKEN"
 
         test_endpoint "Partner A: Products API (有權限)" \
             "https://localhost/partner/api/product/" 200 \
-            "-H 'Authorization: Bearer $PARTNER_A_TOKEN'"
+            "Authorization: Bearer $PARTNER_A_TOKEN"
 
         test_endpoint "Partner A: Users API (有權限)" \
             "https://localhost/partner/api/user/" 200 \
-            "-H 'Authorization: Bearer $PARTNER_A_TOKEN'"
+            "Authorization: Bearer $PARTNER_A_TOKEN"
     else
-        warn "Partner A Token 生成失敗：$PARTNER_A_TOKEN"
+        warn "Partner A Token 生成失敗，請確認 generate-jwt.sh 可執行"
     fi
 
     # 測試 Partner B（只有 orders 權限）
     info "測試 Partner B (僅 Orders 權限)..."
-    if PARTNER_B_TOKEN=$(./scripts/generate-jwt.sh partner-company-b 2>&1); then
+    if PARTNER_B_TOKEN=$(./scripts/generate-jwt.sh partner-company-b 2>/dev/null); then
         # Token 生成成功
         test_endpoint "Partner B: Orders API (有權限)" \
             "https://localhost/partner/api/order/" 200 \
-            "-H 'Authorization: Bearer $PARTNER_B_TOKEN'"
+            "Authorization: Bearer $PARTNER_B_TOKEN"
 
         test_endpoint "Partner B: Products API (無權限，預期 403)" \
             "https://localhost/partner/api/product/" 403 \
-            "-H 'Authorization: Bearer $PARTNER_B_TOKEN'"
+            "Authorization: Bearer $PARTNER_B_TOKEN"
     else
-        warn "Partner B Token 生成失敗：$PARTNER_B_TOKEN"
+        warn "Partner B Token 生成失敗，請確認 generate-jwt.sh 可執行"
     fi
 
     # 測試 Partner C（只有 products 權限）
     info "測試 Partner C (僅 Products 權限)..."
-    if PARTNER_C_TOKEN=$(./scripts/generate-jwt.sh partner-company-c 2>&1); then
+    if PARTNER_C_TOKEN=$(./scripts/generate-jwt.sh partner-company-c 2>/dev/null); then
         # Token 生成成功
         test_endpoint "Partner C: Products API (有權限)" \
             "https://localhost/partner/api/product/" 200 \
-            "-H 'Authorization: Bearer $PARTNER_C_TOKEN'"
+            "Authorization: Bearer $PARTNER_C_TOKEN"
 
         test_endpoint "Partner C: Orders API (無權限，預期 403)" \
             "https://localhost/partner/api/order/" 403 \
-            "-H 'Authorization: Bearer $PARTNER_C_TOKEN'"
+            "Authorization: Bearer $PARTNER_C_TOKEN"
     else
-        warn "Partner C Token 生成失敗：$PARTNER_C_TOKEN"
+        warn "Partner C Token 生成失敗，請確認 generate-jwt.sh 可執行"
     fi
 else
     warn "generate-jwt.sh 不存在，跳過 Partner API 測試"
@@ -148,20 +153,20 @@ else
     MODE="prod"
 fi
 
-if [ "$MODE" == "dev" ]; then
+if [ "$MODE" = "dev" ]; then
     info "開發模式：測試 localhost Debug 端口"
     test_endpoint "API-User Debug" "http://localhost:8101/health"
     test_endpoint "API-Order Debug" "http://localhost:8102/health"
     test_endpoint "API-Product Debug" "http://localhost:8103/health"
 else
     info "生產模式：驗證 Backend APIs 完全隔離"
-    
+
     if curl -s --max-time 2 http://localhost:8101/health &>/dev/null; then
         fail "  API-User 不應該可以從主機訪問 ✗"
-        ((FAILED++))
+        ((++FAILED))
     else
         success "  API-User 已隔離（無法從主機訪問）✓"
-        ((PASSED++))
+        ((++PASSED))
     fi
 fi
 

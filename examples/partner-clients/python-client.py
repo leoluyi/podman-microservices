@@ -99,7 +99,7 @@ class PartnerAPIClient:
         status_code = error.response.status_code
         try:
             error_data = error.response.json()
-        except:
+        except Exception:
             error_data = {'error': error.response.text}
 
         print(f"API Error [{endpoint}]: {status_code} - {error_data}")
@@ -149,7 +149,7 @@ def main():
     partner_id = os.getenv('PARTNER_ID', 'partner-company-a')
     jwt_secret = os.getenv(
         'JWT_SECRET_PARTNER_A',
-        'dev-secret-partner-a-change-in-production-32chars'
+        'dev-secret-partner-a-for-testing-only-32chars'
     )
     base_url = os.getenv('API_BASE_URL', 'https://localhost')
 

@@ -5,7 +5,7 @@ echo "服務狀態："
 echo "=========================================="
 for service in "${SERVICES[@]}"; do
     status=$(systemctl --user is-active "$service" 2>/dev/null || echo "inactive")
-    if [ "$status" == "active" ]; then
+    if [ "$status" = "active" ]; then
         echo "  ✓ $service: 🟢 ACTIVE"
     else
         echo "  ✗ $service: 🔴 $status"

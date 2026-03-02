@@ -142,41 +142,4 @@ function _M.verify_and_check_endpoint(api, path)
     ngx.log(ngx.INFO, "Partner (", partner_id, ") authenticated: ", method, " ", api, path)
 end
 
--- ============================================================================
--- API 層級權限驗證（向後兼容，建議遷移到 verify_and_check_endpoint）
--- ============================================================================
--- 驗證 Partner JWT 並檢查 API 層級權限
--- api: "orders", "products", "users"
--- action: "read", "write", "delete"
-function _M.verify_and_check_permission(api, action)
-    ngx.log(ngx.WARN, "verify_and_check_permission() is deprecated, use verify_and_check_endpoint() for fine-grained control")
-
-    -- 1. 驗證 JWT Token
-    local partner_id = verify_jwt_token()
-    if not partner_id then
-        return  -- verify_jwt_token 已經處理錯誤回應
-    end
-
-    -- 2. 檢查 API 層級權限（向後兼容）
-    if not partners.has_permission(partner_id, api, action) then
-        local partner_name = partners.get_name(partner_id)
-        ngx.log(ngx.WARN, "Partner API (", api, "): Access denied for ", partner_id, " (", partner_name, ") - missing ", action, " permission")
-        ngx.status = ngx.HTTP_FORBIDDEN
-        ngx.header["Content-Type"] = "application/json"
-        ngx.say('{"error":"Forbidden","message":"Insufficient permissions for this API"}')
-        ngx.exit(ngx.HTTP_FORBIDDEN)
-        return
-    end
-
-    -- 3. 設定變數和 Headers
-    ngx.var.jwt_user_id = partner_id
-    ngx.var.jwt_client_type = "partner"
-
-    local partner_name = partners.get_name(partner_id)
-    ngx.req.set_header("X-Partner-ID", partner_id)
-    ngx.req.set_header("X-Partner-Name", partner_name)
-
-    ngx.log(ngx.INFO, "Partner API (", api, "): Authenticated ", partner_id, " (", partner_name, ") with ", action, " permission")
-end
-
 return _M

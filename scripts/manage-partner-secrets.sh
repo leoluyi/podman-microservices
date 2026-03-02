@@ -53,8 +53,8 @@ list_secrets() {
     for partner in a b c; do
         secret_name="jwt-secret-partner-$partner"
 
-        if podman secret exists $secret_name 2>/dev/null; then
-            created=$(podman secret inspect $secret_name --format '{{.CreatedAt}}' 2>/dev/null || echo "N/A")
+        if podman secret exists "$secret_name" 2>/dev/null; then
+            created=$(podman secret inspect "$secret_name" --format '{{.CreatedAt}}' 2>/dev/null || echo "N/A")
             printf "%-25s ${GREEN}%-10s${NC} %-30s\n" "$secret_name" "✓ EXISTS" "$created"
         else
             printf "%-25s ${RED}%-10s${NC} %-30s\n" "$secret_name" "✗ MISSING" "N/A"
@@ -83,7 +83,7 @@ create_secret() {
     secret_name="jwt-secret-partner-$PARTNER_ID"
 
     # 檢查是否已存在
-    if podman secret exists $secret_name 2>/dev/null; then
+    if podman secret exists "$secret_name" 2>/dev/null; then
         error "Secret 已存在: $secret_name"
         info "如需更換，請使用 rotate 命令"
         exit 1
@@ -96,7 +96,7 @@ create_secret() {
     SECRET_VALUE=$(openssl rand -base64 32)
 
     # 創建 Podman Secret
-    echo -n "$SECRET_VALUE" | podman secret create $secret_name -
+    echo -n "$SECRET_VALUE" | podman secret create "$secret_name" -
 
     success "Secret 已創建: $secret_name"
     echo ""
@@ -135,7 +135,7 @@ rotate_secret() {
     secret_name="jwt-secret-partner-$PARTNER_ID"
 
     # 檢查是否存在
-    if ! podman secret exists $secret_name 2>/dev/null; then
+    if ! podman secret exists "$secret_name" 2>/dev/null; then
         error "Secret 不存在: $secret_name"
         info "請使用 create 命令先創建"
         exit 1
@@ -169,7 +169,7 @@ rotate_secret() {
 
     # 刪除舊 Secret
     info "刪除舊 Secret..."
-    if ! podman secret rm $secret_name 2>/dev/null; then
+    if ! podman secret rm "$secret_name" 2>/dev/null; then
         error "刪除舊 Secret 失敗"
         # 嘗試重啟服務
         systemctl --user start ssl-proxy 2>/dev/null
@@ -178,11 +178,11 @@ rotate_secret() {
 
     # 創建新 Secret（使用預先生成的值）
     info "創建新 Secret..."
-    if ! echo -n "$SECRET_VALUE" | podman secret create $secret_name - 2>/dev/null; then
+    if ! echo -n "$SECRET_VALUE" | podman secret create "$secret_name" - 2>/dev/null; then
         error "創建新 Secret 失敗"
-        warning "Secret 值已保存，請手動創建："
+        warning "請手動創建 Secret（Secret 值已顯示在上方）："
         echo ""
-        echo "  echo -n \"$SECRET_VALUE\" | podman secret create $secret_name -"
+        echo "  echo -n '<secret-value>' | podman secret create \"$secret_name\" -"
         echo ""
         exit 1
     fi
@@ -228,7 +228,7 @@ delete_secret() {
     secret_name="jwt-secret-partner-$PARTNER_ID"
 
     # 檢查是否存在
-    if ! podman secret exists $secret_name 2>/dev/null; then
+    if ! podman secret exists "$secret_name" 2>/dev/null; then
         error "Secret 不存在: $secret_name"
         exit 1
     fi
@@ -253,7 +253,7 @@ delete_secret() {
 
     # 刪除 Secret
     info "刪除 Secret..."
-    if ! podman secret rm $secret_name 2>/dev/null; then
+    if ! podman secret rm "$secret_name" 2>/dev/null; then
         error "刪除 Secret 失敗"
         systemctl --user start ssl-proxy 2>/dev/null
         exit 1
@@ -286,7 +286,7 @@ show_secret() {
     secret_name="jwt-secret-partner-$PARTNER_ID"
 
     # 檢查是否存在
-    if ! podman secret exists $secret_name 2>/dev/null; then
+    if ! podman secret exists "$secret_name" 2>/dev/null; then
         error "Secret 不存在: $secret_name"
         exit 1
     fi
@@ -294,7 +294,7 @@ show_secret() {
     info "Secret 詳細資訊: $secret_name"
     echo ""
 
-    podman secret inspect $secret_name --format "ID:         {{.ID}}
+    podman secret inspect "$secret_name" --format "ID:         {{.ID}}
 Name:       {{.Spec.Name}}
 Created At: {{.CreatedAt}}
 Updated At: {{.UpdatedAt}}"

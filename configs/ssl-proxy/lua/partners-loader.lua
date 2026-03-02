@@ -23,8 +23,13 @@ local DEV_SECRETS = {
 }
 
 -- 檢查是否為生產環境
+-- 若未設定 ENVIRONMENT / ENV，預設視為開發模式並記錄警告
 local function is_production()
-    local env = os.getenv("ENVIRONMENT") or os.getenv("ENV") or "production"
+    local env = os.getenv("ENVIRONMENT") or os.getenv("ENV")
+    if not env then
+        ngx.log(ngx.WARN, "ENVIRONMENT variable not set, defaulting to development mode")
+        return false
+    end
     return env == "production" or env == "prod"
 end
 
@@ -205,38 +210,6 @@ function _M.has_endpoint_permission(partner_id, api, path, method)
 
     -- 沒有匹配的規則
     ngx.log(ngx.WARN, "No matching endpoint rule: ", partner_id, " -> ", api, path, " [", method, "]")
-    return false
-end
-
--- 向後兼容：檢查 API 層級權限（已棄用，建議使用 has_endpoint_permission）
--- api: "orders", "products", "users"
--- action: "read", "write", "delete"
-function _M.has_permission(partner_id, api, action)
-    ngx.log(ngx.WARN, "has_permission() is deprecated, use has_endpoint_permission() instead")
-
-    local partner = _M.partners[partner_id]
-    if not partner then
-        return false
-    end
-
-    local api_perms = partner.permissions[api]
-    if not api_perms then
-        return false
-    end
-
-    -- 如果使用新的 endpoint 結構，無法用舊方法判斷
-    if api_perms.endpoints then
-        ngx.log(ngx.ERR, "Cannot use has_permission() with endpoint-level permissions")
-        return false
-    end
-
-    -- 舊結構支援
-    for _, perm in ipairs(api_perms) do
-        if perm == action then
-            return true
-        end
-    end
-
     return false
 end
 
