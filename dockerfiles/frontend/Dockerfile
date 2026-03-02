@@ -87,8 +87,9 @@ RUN cat > /usr/share/nginx/html/index.html << 'EOF'
 
         <h2>測試 API 端點</h2>
         <p>點擊按鈕測試 API（需要 JWT Token）</p>
-        
+
         <div>
+            <button onclick="testAPI('/api/health', false)">測試 BFF 狀態</button>
             <button onclick="testAPI('/api/users')">測試 Users API</button>
             <button onclick="testAPI('/api/orders')">測試 Orders API</button>
             <button onclick="testAPI('/api/products')">測試 Products API</button>
@@ -105,23 +106,21 @@ RUN cat > /usr/share/nginx/html/index.html << 'EOF'
     </div>
 
     <script>
-        async function testAPI(endpoint) {
+        async function testAPI(endpoint, requireJWT = true) {
             const resultDiv = document.getElementById('result');
             resultDiv.style.display = 'block';
             resultDiv.textContent = '正在請求 ' + endpoint + '...\n';
 
             try {
-                // 注意：實際應該要有 JWT Token
-                const response = await fetch(endpoint, {
-                    headers: {
-                        'Authorization': 'Bearer YOUR_JWT_TOKEN_HERE'
-                    }
-                });
-                
+                const headers = {};
+                if (requireJWT) {
+                    headers['Authorization'] = 'Bearer YOUR_JWT_TOKEN_HERE';
+                }
+                const response = await fetch(endpoint, { headers });
                 const data = await response.json();
                 resultDiv.textContent = JSON.stringify(data, null, 2);
             } catch (error) {
-                resultDiv.textContent = '錯誤: ' + error.message + '\n\n提示：需要有效的 JWT Token';
+                resultDiv.textContent = '錯誤: ' + error.message + (requireJWT ? '\n\n提示：需要有效的 JWT Token' : '');
             }
         }
     </script>

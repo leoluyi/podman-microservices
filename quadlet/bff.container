@@ -9,13 +9,7 @@ Wants=api-user.service api-order.service api-product.service
 # ============================================================================
 # 鏡像配置
 # ============================================================================
-# 替換成你的 BFF 服務鏡像
-# Image=localhost/bff:latest   <- 實際部署：Spring Boot 監聽 8080
-#
-# 佔位測試用（WARNING：nginx:alpine 預設監聽 80，與 upstream.conf 設定的 8080 不符）
-# 若要使用佔位 image 做快速測試，請掛載 configs/bff/nginx.conf 以監聽 8080：
-#   Volume=/opt/app/configs/bff/nginx.conf:/etc/nginx/nginx.conf:ro
-Image=docker.io/library/nginx:alpine
+Image=localhost/bff:latest
 
 ContainerName=bff
 
