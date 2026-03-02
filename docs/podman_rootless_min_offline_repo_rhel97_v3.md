@@ -11,17 +11,6 @@
 
 ---
 
-## 0. 設計原則
-
-本手冊採「最小 RPM 集合 + 本機 `file://` repo」策略，理由如下：
-
-1. **不建整包 AppStream / BaseOS** — 體積達 GB 等級，傳輸與稽核成本過高。
-2. **不只抓 podman 本體** — Rootless 模式額外需要 user-space networking、overlay storage、UID mapping、firewall backend 等套件。
-3. **dnf 可管理、repo 可維運** — 比一次性 `rpm -ivh *.rpm` 更可控、可重現。
-4. **版本鎖定 Rocky 9.7 ↔ RHEL 9.7** — 確保 ABI 相容、避免相依版本錯配。
-
----
-
 ## 1. 最小必要套件清單
 
 ### 1.1 核心套件
@@ -68,7 +57,7 @@
 | `iproute` | `ip` 指令（bridge / veth 管理；通常已裝但精簡環境可能缺） |
 | `procps-ng` | `sysctl` 指令（namespace 設定必要） |
 
-> **為什麼要補 firewall 套件？** Netavark 建立 bridge 網路（含 `--internal`）時，需呼叫 `iptables` 設定 FORWARD chain 的隔離規則。RHEL 9 標準安裝通常已含這些套件，但 air-gapped 精簡環境可能被移除，保守補齊可避免執行期 `iptables: command not found` 失敗。
+> Netavark 建立 bridge 網路時需要 `iptables`。air-gapped 精簡環境可能缺少這些套件，保守補齊可避免 `iptables: command not found`。
 
 ---
 
@@ -128,7 +117,7 @@ sudo dnf download --resolve --alldeps --destdir . \
 rm -f *.src.rpm 2>/dev/null || true
 ```
 
-> ⚠️ **重要**：若不加 `--alldeps`，已安裝於 Rocky 的套件（如 `shadow-utils`、`glibc` 等基礎相依）不會被下載，導致離線機缺件。
+> `--alldeps` 確保已安裝於 Rocky 的基礎相依（如 `glibc`）也會被下載，離線機才不會缺件。
 
 **檢查點**：執行 `ls *.rpm | wc -l` 確認 RPM 數量（通常 60–120 個，視環境而異）。
 
@@ -234,7 +223,7 @@ sudo dnf install -y --disablerepo="*" --enablerepo="podman-offline" \
   iproute procps-ng
 ```
 
-> **說明**：雖然相依會自動拉入，但明確列出所有套件可確保安裝意圖清晰，也方便稽核比對白名單。若離線機已有同版本套件，`dnf` 會自動跳過。
+> 明確列出所有套件方便稽核，`dnf` 會自動跳過已安裝的同版本套件。
 
 **檢查點**：
 
@@ -330,7 +319,7 @@ loginctl show-user appuser --property=Linger
 
 **檢查點**：輸出應為 `Linger=yes`。
 
-> **說明**：若不啟用 linger，使用者登出後其 rootless 容器與 `podman` 程序將被 systemd 終止。
+> 未啟用時，使用者登出後 rootless 容器將被 systemd 終止。
 
 ---
 

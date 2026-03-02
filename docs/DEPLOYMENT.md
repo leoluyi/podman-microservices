@@ -140,6 +140,21 @@ systemctl --user enable api-user api-order api-product
 - **開發環境**：使用環境檔案（`.container.d/environment.conf`）方便測試
 - **生產環境**：使用 Podman Secrets 加密存儲
 
+### Secret 存放位置
+
+| 環境 | 存放位置 | 格式 |
+|------|---------|------|
+| 生產 | `~/.local/share/containers/storage/secrets/` | 加密，值無法直接讀出 |
+| 開發 | `~/.config/containers/systemd/ssl-proxy.container.d/environment.conf` | 明文 INI |
+
+**優先順序**：Podman Secret 存在時，會覆蓋 `quadlet/ssl-proxy.container` 中的 `Environment=` fallback 值。
+
+```
+# quadlet/ssl-proxy.container 的注入方式
+Secret=jwt-secret-partner-a,type=env,target=JWT_SECRET_PARTNER_A   ← 生產：從 Podman Secret 注入
+Environment=JWT_SECRET_PARTNER_A=dev-secret-partner-a-fallback      ← 開發：Secret 不存在時的 fallback
+```
+
 ### Partner Secrets 管理（生產環境）
 
 #### 創建 Partner Secret

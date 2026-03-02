@@ -1,7 +1,5 @@
 # Endpoint 層級權限控制指南
 
-本文檔說明如何配置和使用 **Endpoint 層級的精細權限控制**。
-
 ## 概覽
 
 權限控制已從 **API 層級**（orders, products, users）升級到 **Endpoint 層級**，支援：

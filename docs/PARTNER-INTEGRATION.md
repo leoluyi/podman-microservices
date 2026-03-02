@@ -1,19 +1,86 @@
 # Partner API 整合指南
 
-本文檔說明如何為 Partner 設定 API 訪問權限，以及 Partner 如何整合 API。
+---
 
-[toc]
+## 流程概覽
+
+### Partner 上線流程
+
+```
+   API 提供方                                  Partner
+       │                                          │
+       ▼                                          │
+  ┌──────────────────────────┐                   │
+  │  ① 設定 Lua 權限配置      │                   │
+  │    partners-loader.lua   │                   │
+  └────────────┬─────────────┘                   │
+               │                                 │
+               ▼                                 │
+  ┌──────────────────────────┐                   │
+  │  ② 建立 Podman Secret     │                   │
+  │    manage-partner-        │                   │
+  │    secrets.sh create      │                   │
+  └────────────┬─────────────┘                   │
+               │                                 │
+               │      安全傳遞 Secret             │
+               └────────────────────────────────▶│
+                                                 │
+                                                 ▼
+                                     ┌───────────────────────┐
+                                     │  ③ 存入 Secret Manager │
+                                     │     / 環境變數         │
+                                     └───────────┬───────────┘
+                                                 │
+                                                 ▼
+                                     ┌───────────────────────┐
+                                     │  ④ 產生 JWT Token      │
+                                     │    （Secret 簽署）     │
+                                     └───────────┬───────────┘
+                                                 │
+               ◀──────── API 呼叫（Bearer JWT）───┘
+```
+
+### API 呼叫認證流程
+
+```
+              ┌────────────────────────────┐
+              │        Partner 發送請求     │
+              │   Authorization:            │
+              │   Bearer <JWT_TOKEN>        │
+              └──────────────┬─────────────┘
+                             │
+                             ▼
+              ┌────────────────────────────┐
+              │   SSL Proxy（OpenResty）    │
+              │   ・JWT 簽章驗證（HS256）   │
+              │   ・過期時間檢查            │
+              │   ・Partner 存在確認        │
+              └──────────────┬─────────────┘
+                             │
+             ┌───────────────┴───────────────┐
+          失敗 ▼                           通過 ▼
+  ┌─────────────────────┐     ┌─────────────────────────────┐
+  │  401 Unauthorized   │     │  注入 X-Partner-ID header    │
+  └─────────────────────┘     │  轉發請求到 Backend API      │
+                              └──────────────┬──────────────┘
+                                             │
+                                             ▼
+                              ┌─────────────────────────────┐
+                              │       Backend API            │
+                              │   Endpoint 權限檢查          │
+                              │  （路徑 + HTTP 方法）        │
+                              └──────────────┬──────────────┘
+                                             │
+                             ┌───────────────┴───────────────┐
+                          無權限 ▼                         通過 ▼
+                  ┌─────────────────────┐     ┌─────────────────────┐
+                  │   403 Forbidden     │     │    回應業務資料      │
+                  └─────────────────────┘     └─────────────────────┘
+```
 
 ---
 
 ## 概覽
-
-### Partner API 特性
-
-- **獨立 JWT Secret**：每個 Partner 有專屬的 JWT Secret
-- **細粒度權限**：可針對不同 API 設定 read/write/delete 權限
-- **HTTP 方法映射**：自動根據 HTTP 方法判斷操作類型
-- **安全隔離**：一個 Partner 的 Secret 洩露不影響其他 Partner
 
 ### 權限矩陣
 
@@ -29,93 +96,19 @@
 
 ## 安全架構與責任分離
 
-### JWT Token 安全模型
+採用對稱式 JWT 認證（HS256）：**我們產生並保管 Secret**，**Partner 用 Secret 自行產生 Token**。
 
-本系統採用**對稱式 JWT 認證**（HS256），基於以下安全原則：
+| 角色 | 職責 |
+|------|------|
+| API 提供方 | 產生強隨機 Secret、安全傳遞給 Partner、儲存 Secret 用於驗證 |
+| Partner | 安全儲存 Secret、在自己系統中產生 Token、管理 Token 生命週期 |
 
-#### 責任分離原則
-
-```
-┌─────────────────────────────────────────────────────────┐
-│ 我們的系統（API 提供方）                                  │
-├─────────────────────────────────────────────────────────┤
-│ 職責：                                                   │
-│ 1. ✅ 產生強隨機 JWT Secret                              │
-│    ./scripts/manage-partner-secrets.sh create a         │
-│                                                          │
-│ 2. ✅ 安全地提供 Secret 給 Partner（僅一次）              │
-│    - 透過加密郵件、安全檔案傳輸、密碼管理系統             │
-│    - 提供整合工具（generate-jwt.sh、SDK、文檔）          │
-│                                                          │
-│ 3. ✅ 儲存 Secret 用於「驗證」Token                       │
-│    - Podman Secrets（生產環境，加密儲存）                │
-│    - Environment Files（開發環境，固定測試值）           │
-│                                                          │
-│ 4. ❌ 不產生 Partner 的 Token                            │
-│    - 違反責任分離原則                                    │
-│    - 使認證失去意義                                      │
-│    - 無法追蹤責任歸屬                                    │
-└─────────────────────────────────────────────────────────┘
-                          ↓
-              【安全地傳遞 Secret + 工具】
-                          ↓
-┌─────────────────────────────────────────────────────────┐
-│ Partner 的系統（API 使用方）                              │
-├─────────────────────────────────────────────────────────┤
-│ 職責：                                                   │
-│ 1. ✅ 安全地儲存我們提供的 Secret                         │
-│    - 環境變數、Secrets 管理系統                          │
-│    - 不放在程式碼中、不提交到版本控制                     │
-│                                                          │
-│ 2. ✅ 在自己的系統中產生 JWT Token                        │
-│    方式 A：使用我們提供的 generate-jwt.sh                │
-│    方式 B：使用我們提供的 SDK（Node.js/Python）          │
-│    方式 C：使用自己的 JWT 函式庫實作                      │
-│                                                          │
-│ 3. ✅ 使用自己產生的 Token 呼叫我們的 API                 │
-│    Authorization: Bearer <partner_generated_token>      │
-│                                                          │
-│ 4. ✅ 對自己的 Token 安全負責                             │
-│    - Token 生命週期管理                                  │
-│    - Token 洩漏時的處理                                  │
-└─────────────────────────────────────────────────────────┘
-```
-
-#### 為什麼這樣設計？
-
-| 原則 | 說明 | 效益 |
-|------|------|------|
-| **身份認證意義** | Partner 產生的 Token 代表他們的身份 | 如果我們產生 Token，就失去「證明對方身份」的意義 |
-| **責任歸屬清晰** | Token 由 Partner 控制 | 安全事件發生時，責任歸屬清楚 |
-| **最小權限原則** | 我們的系統無法偽造 Partner 身份 | 降低內部人員濫用風險 |
-| **安全邊界分明** | Secret 只用於驗證，不用於生成 | 降低 Secret 洩漏的影響範圍 |
-
-#### 常見誤解澄清
-
-❓ **「我們可以用 generate-jwt.sh 幫 Partner 產生 Token 嗎？」**
-
-❌ **錯誤做法**：在我們的系統中執行
-```bash
-# 在 API 提供方的伺服器上（錯誤）
-./scripts/generate-jwt.sh partner-company-a
-# 然後把 Token 給 Partner... ← 違反安全原則
-```
-
-✅ **正確做法**：Partner 在他們的系統中執行
-```bash
-# 在 Partner 的伺服器上（正確）
-./scripts/generate-jwt.sh partner-company-a
-# Partner 自己產生、自己使用
-```
-
-#### 開發與生產環境的差異
+**重要**：不要在 API 提供方的伺服器上幫 Partner 產生 Token，這違反責任分離原則。
 
 | 環境 | Secret 管理 | Token 產生 |
 |------|------------|-----------|
-| **開發環境** | 固定測試 Secret（公開、不安全） | 我們可以用 generate-jwt.sh 測試（模擬 Partner） |
-| **生產環境** | Podman Secrets（加密、隨機） | 只能由 Partner 產生（使用我們提供的工具） |
-
-⚠️ **開發環境例外**：開發環境使用公開的測試 Secret，我們可以用 `generate-jwt.sh` 產生 Token 來測試系統，這是在**模擬 Partner 的行為**，不是實際的生產使用。
+| 開發 | 固定測試 Secret（公開） | 可用 `generate-jwt.sh` 模擬 |
+| 生產 | Podman Secrets（加密） | 只能由 Partner 自行產生 |
 
 ---
 
@@ -215,29 +208,7 @@ systemctl --user restart ssl-proxy
 
 ### 2. 權限說明
 
-> **已升級**：實際實作採用 Endpoint 層級權限控制，支援精確的路徑與 HTTP 方法匹配。下方為概念說明，完整設定格式見 [ENDPOINT-PERMISSIONS.md](./ENDPOINT-PERMISSIONS.md)。
-
-#### 權限類型（概念）
-
-- **read**：允許 GET 請求
-- **write**：允許 POST, PUT, PATCH 請求
-- **delete**：允許 DELETE 請求
-
-#### 實際配置格式（Endpoint 層級）
-
-```lua
-permissions = {
-    orders = {
-        endpoints = {
-            { pattern = "/list", methods = {"GET"} },
-            { pattern = "/create", methods = {"POST"} },
-            { pattern = "^/%d+$", methods = {"GET", "PUT", "PATCH"}, regex = true }
-        }
-    }
-}
-```
-
-詳細格式與範例見 [ENDPOINT-PERMISSIONS.md](./ENDPOINT-PERMISSIONS.md)。
+實際實作採用 Endpoint 層級權限控制，配置格式與範例見 [ENDPOINT-PERMISSIONS.md](./ENDPOINT-PERMISSIONS.md)。
 
 ### 3. 管理 Partner Secrets
 
@@ -245,20 +216,15 @@ create / list / rotate / delete 的完整操作說明見 [DEPLOYMENT.md § Partn
 
 ### 4. 提供資訊給 Partner
 
-Partner 需要以下資訊才能整合 API：
+提供以下資訊給 Partner：
 
-#### 必要資訊清單
-
-- ✅ **Partner ID**：例如 `partner-company-a`
-- ✅ **JWT Secret**：該 Partner 專屬的 Secret（從 `manage-partner-secrets.sh` 創建時取得）
-- ✅ **API Base URL**：例如 `https://api.example.com`
-- ✅ **可訪問的 API 列表**：根據權限配置
-- ✅ **API 文檔**：端點說明和範例
-- ✅ **整合工具**：提供以下任一或全部
-  - `scripts/generate-jwt.sh` - Shell 腳本工具
-  - `examples/partner-clients/nodejs-client.js` - Node.js SDK
-  - `examples/partner-clients/python-client.py` - Python SDK
-  - 整合文檔 - JWT 規範和其他語言實作參考
+| 項目 | 說明 |
+|------|------|
+| Partner ID | 例如 `partner-company-a` |
+| JWT Secret | 從 `manage-partner-secrets.sh create` 創建時取得（僅顯示一次） |
+| API Base URL | 例如 `https://api.example.com` |
+| 可訪問的 API 列表 | 依權限配置 |
+| 整合工具 | `generate-jwt.sh`、Node.js/Python SDK（`examples/partner-clients/`） |
 
 #### 如何取得 JWT Secret
 
@@ -287,77 +253,9 @@ Partner 需要以下資訊才能整合 API：
 
 使用固定測試 Secret（位於 `quadlet/ssl-proxy.container.d/environment.conf.example`）
 
-#### 範例：提供給 Partner 的資訊
-
-```
-Partner 整合資訊
-================
-
-基本資訊
---------
-Partner ID: partner-company-a
-JWT Secret: rJ9kL2mN4oP6qR8sT0uV1wX3yZ5aB7cD9eF1gH3iJ5kL7
-API Base URL: https://api.example.com
-
-⚠️ 請妥善保管 JWT Secret，不要分享或提交到版本控制
-
-可訪問的 API
------------
-- Orders API: /partner/api/order/ (read, write)
-- Products API: /partner/api/product/ (read, write)
-- Users API: /partner/api/user/ (read)
-
-整合工具
---------
-我們提供以下工具協助您快速整合：
-
-1. Shell 腳本（最簡單）
-   檔案: scripts/generate-jwt.sh
-   使用: ./generate-jwt.sh partner-company-a
-   適合: 快速測試、Shell 腳本、CI/CD Pipeline
-
-2. Node.js SDK
-   檔案: examples/partner-clients/nodejs-client.js
-   使用: const client = new PartnerAPIClient(...)
-   適合: Node.js 應用程式
-
-3. Python SDK
-   檔案: examples/partner-clients/python-client.py
-   使用: client = PartnerAPIClient(...)
-   適合: Python 應用程式
-
-4. 自行實作
-   請參考整合文檔中的 JWT 規範
-   適合: Java、Go、C#、PHP 等其他語言
-
-重要提醒
---------
-✅ 請在您的系統中產生 JWT Token（使用上述工具）
-❌ 請勿向我們索取 Token（違反安全原則）
-
-文檔與支援
----------
-- 整合指南: `docs/PARTNER-INTEGRATION.md`
-- API 參考: `{由 API 提供方提供}`
-- 範例程式碼: `examples/partner-clients/`
-
-技術支援
---------
-- Email: `{由 API 提供方提供}`
-- 工作時間: 週一至週五 09:00-18:00 (GMT+8)
-```
-
 #### 安全傳遞 Secret
 
-**不要使用的方式**：
-- ❌ 明文 Email
-- ❌ Slack 訊息
-- ❌ 文件共享（Google Docs, Dropbox）
-
-**推薦方式**：
-- ✅ 加密的密碼管理工具（1Password, LastPass）
-- ✅ 安全檔案傳輸（加密的 Zip + 電話告知密碼）
-- ✅ 專用的 Secrets 管理系統（HashiCorp Vault）
+使用加密密碼管理工具（1Password、LastPass、HashiCorp Vault）或加密 ZIP 傳遞。不要用明文 Email、Slack 或文件共享服務。
 
 ---
 
@@ -410,128 +308,49 @@ export API_BASE_URL="https://api.example.com"
 }
 ```
 
-#### 產生方式選擇
+#### 產生方式
 
-Partner 可以選擇以下任一方式在自己的系統中產生 Token：
+Partner 在**自己的系統**中產生 Token，不應向 API 提供方索取。
 
-##### 方式 1：使用 generate-jwt.sh 腳本（推薦 - 最簡單）
-
-**適合場景**：
-- 快速整合測試
-- Shell 腳本環境
-- CI/CD Pipeline
-- Cron Job 定期任務
-
-**使用方法**：
+##### Shell（generate-jwt.sh）
 
 ```bash
-# 設定環境變數（使用 API 提供方給的 Secret）
 export JWT_SECRET_PARTNER_A="your-secret-from-provider"
-
-# 產生 Token（預設永久有效）
-TOKEN=$(./generate-jwt.sh partner-company-a)
-
-# 產生 Token（自訂有效期）
-TOKEN=$(./generate-jwt.sh partner-company-a 2592000)  # 30 天有效期
-
-# 使用 Token 呼叫 API
+TOKEN=$(./generate-jwt.sh partner-company-a)           # 永久有效
+TOKEN=$(./generate-jwt.sh partner-company-a 2592000)   # 30 天有效期
 curl -H "Authorization: Bearer $TOKEN" https://api.example.com/partner/api/order/
 ```
 
-**腳本特性**：
-- ✅ 自動產生符合規範的 JWT Token
-- ✅ 包含完整的 Payload 欄位（sub, iss, aud, iat, exp）
-- ✅ 預設永久有效（至 2286 年，避免 Token 突然失效）
-- ✅ 可自訂有效期（支援任意秒數或永久）
-- ✅ 輸出詳細的 Debug 資訊（stderr）
-- ✅ 只輸出 Token 到 stdout（方便腳本使用）
+有效期：`0` 或不指定為永久（預設），否則單位為秒。
 
-**有效期說明**：
-| 時長 | 秒數 | 使用場景 |
-|------|------|----------|
-| 永久 | 0 或不指定 | 預設（避免失效問題，最方便） |
-| 1 小時 | 3600 | 測試開發 |
-| 1 天 | 86400 | 短期測試 |
-| 30 天 | 2592000 | 需要定期更新的場景 |
-| 1 年 | 31536000 | 年度審查輪換 |
+⚠️ 永久 Token 須妥善保管 Secret，洩漏時立即聯繫 API 提供方輪換。
 
-⚠️ **永久 Token 安全提醒**：
-- **務必妥善保管 JWT Secret**（不要硬編碼、不要提交到版本控制）
-- Token 洩漏時**立即**聯繫 API 提供方輪換 Secret
-- 建議每年主動輪換一次 Secret（可設定提醒）
-- 不使用的 Token 建議主動通知 API 提供方停用
-
-**範例：整合到 Cron Job**
-
-```bash
-#!/bin/bash
-# 每天凌晨同步訂單資料
-
-# 產生 Token
-TOKEN=$(./generate-jwt.sh partner-company-a 2>/dev/null)
-
-# 呼叫 API 取得訂單
-curl -H "Authorization: Bearer $TOKEN" \
-     https://api.example.com/partner/api/order/ \
-     -o /tmp/orders.json
-
-# 處理資料...
-```
-
-##### 方式 2：使用 Node.js SDK
-
-**適合場景**：
-- Node.js 應用程式
-- 需要完整的 API 客戶端
-- 自動 Token 管理
-
-**使用方法**：
+##### Node.js
 
 ```javascript
-// 使用我們提供的 SDK
 const PartnerAPIClient = require('./partner-client');
-
 const client = new PartnerAPIClient(
-    process.env.PARTNER_ID,
-    process.env.JWT_SECRET,
-    'https://api.example.com'
+    process.env.PARTNER_ID, process.env.JWT_SECRET, 'https://api.example.com'
 );
-
-// SDK 會自動產生和管理 Token
 const orders = await client.getOrders();
 ```
 
-**手動產生 Token**：
+手動產生：
 
 ```javascript
 const jwt = require('jsonwebtoken');
-
 const token = jwt.sign(
-    {
-        sub: 'partner-company-a',
-        iss: 'partner-api-system',
-        aud: 'partner-api',
-        iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + 3600  // 1 小時
-    },
+    { sub: 'partner-company-a', iss: 'partner-api-system', aud: 'partner-api',
+      iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 3600 },
     process.env.JWT_SECRET,
     { algorithm: 'HS256' }
 );
 ```
 
-##### 方式 3：使用 Python SDK
-
-**適合場景**：
-- Python 應用程式
-- 資料分析腳本
-- 自動化任務
-
-**使用方法**：
+##### Python
 
 ```python
-# 使用我們提供的 SDK
 from partner_client import PartnerAPIClient
-
 client = PartnerAPIClient(
     partner_id=os.getenv('PARTNER_ID'),
     jwt_secret=os.getenv('JWT_SECRET'),
@@ -639,43 +458,17 @@ var tokenString = tokenHandler.WriteToken(token);
 ```
 </details>
 
-#### Token 生成最佳實踐
+#### Token 最佳實踐
 
-| 實踐項目 | 建議 | 原因 |
-|---------|------|------|
-| **過期時間** | 1-24 小時 | 平衡安全性與便利性 |
-| **Token 快取** | 快過期前 1 分鐘重新生成 | 避免 Token 過期導致 API 呼叫失敗 |
-| **Secret 儲存** | 環境變數或 Secrets 管理系統 | 不要硬編碼在程式碼中 |
-| **錯誤處理** | 401 錯誤時自動重新生成 Token | 提高系統健壯性 |
-| **日誌記錄** | 不要記錄完整 Token | 防止 Token 洩漏 |
+- 過期時間：1-24 小時（永久 Token 須妥善管理 Secret）
+- 快取：到期前 1 分鐘重新生成
+- Secret：用環境變數，不要硬編碼
+- 日誌：不要記錄完整 Token
 
 ### 3. API 呼叫
 
-#### 基本請求
-
 ```bash
-# 使用 Token 呼叫 API
-curl -X GET https://api.example.com/partner/api/order/ \
-     -H "Authorization: Bearer ${TOKEN}" \
-     -H "Content-Type: application/json"
-```
-
-#### 完整範例（Node.js）
-
-```javascript
-const axios = require('axios');
-
-async function getOrders(token) {
-    const response = await axios.get(
-        'https://api.example.com/partner/api/order/',
-        {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        }
-    );
-    return response.data;
-}
+curl -H "Authorization: Bearer ${TOKEN}" https://api.example.com/partner/api/order/
 ```
 
 ### 4. 錯誤處理
@@ -761,90 +554,11 @@ try {
 
 ## 最佳實踐
 
-### Token 管理
-
-#### Token 生命週期
-
-```javascript
-class TokenManager {
-    constructor(partnerId, secret) {
-        this.partnerId = partnerId;
-        this.secret = secret;
-        this.token = null;
-        this.expiresAt = 0;
-    }
-
-    getToken() {
-        // 如果 Token 快過期，重新生成
-        if (!this.token || Date.now() / 1000 > this.expiresAt - 60) {
-            this.refreshToken();
-        }
-        return this.token;
-    }
-
-    refreshToken() {
-        const expiresIn = 3600; // 1 小時
-        this.token = jwt.sign(
-            {
-                sub: this.partnerId,
-                iat: Math.floor(Date.now() / 1000),
-                exp: Math.floor(Date.now() / 1000) + expiresIn
-            },
-            this.secret,
-            { algorithm: 'HS256' }
-        );
-        this.expiresAt = Math.floor(Date.now() / 1000) + expiresIn;
-    }
-}
-```
-
-### 安全建議
-
-1. **保護 JWT Secret**
-   - 使用環境變數，不要硬編碼
-   - 不要提交到版本控制
-   - 定期輪換（建議每 90 天）
-
-2. **Token 過期時間**
-   - 使用合理的過期時間（建議 1-24 小時）
-   - 不要使用永久 Token
-
-3. **HTTPS**
-   - 生產環境必須使用 HTTPS
-   - 驗證 SSL 憑證
-
-4. **錯誤處理**
-   - 不要在日誌中輸出完整 Token
-   - 實現重試邏輯（指數退避）
-
-5. **速率限制**
-   - 實現本地速率限制
-   - 尊重 API 的速率限制
-
-### 監控與日誌
-
-#### 建議記錄的資訊
-
-```javascript
-// 成功請求
-logger.info('API Request', {
-    partner_id: partnerId,
-    endpoint: '/partner/api/order/',
-    method: 'GET',
-    status: 200,
-    duration_ms: 123
-});
-
-// 失敗請求
-logger.error('API Error', {
-    partner_id: partnerId,
-    endpoint: '/partner/api/order/',
-    method: 'POST',
-    status: 403,
-    error: 'Forbidden',
-    message: 'Insufficient permissions'
-});
-```
+- Secret：用環境變數，不要硬編碼，每 90 天輪換
+- Token 過期：1-24 小時，到期前 1 分鐘自動重新生成
+- 日誌：記錄 `partner_id`、endpoint、status、duration_ms，不記錄完整 Token
+- HTTPS：生產環境必須驗證 SSL 憑證
+- 速率限制：實作指數退避重試，尊重 API 速率限制
 
 ---
 
@@ -957,46 +671,25 @@ systemctl --user restart ssl-proxy
 
 ### 修改權限
 
-```lua
--- 修改 configs/ssl-proxy/lua/partners-loader.lua
-["partner-company-a"] = {
-    secret = os.getenv("JWT_SECRET_PARTNER_A"),
-    name = "Company A Corp",
-    permissions = {
-        orders = { "read", "write" },
-        products = { "read", "write", "delete" },  -- 新增 delete
-        users = { "read" }
-    }
-}
-```
+編輯 `configs/ssl-proxy/lua/partners-loader.lua`，格式見 [ENDPOINT-PERMISSIONS.md](./ENDPOINT-PERMISSIONS.md)。
 
 ### 停用 Partner
 
-暫時停用 Partner（不刪除配置）：
-
 ```lua
 ["partner-company-a"] = {
-    secret = "disabled",  -- 設為無效 Secret
-    name = "Company A Corp (Disabled)",
-    permissions = {}      -- 清空權限
+    secret = "disabled",
+    permissions = {}
 }
 ```
 
 ### 輪換 Secret
 
 ```bash
-# 1. 生成新 Secret
 NEW_SECRET=$(openssl rand -base64 32)
-
-# 2. 更新環境變數
-# 編輯 quadlet/ssl-proxy.container
-Environment=JWT_SECRET_PARTNER_A=$NEW_SECRET
-
-# 3. 重啟服務
-systemctl --user daemon-reload
-systemctl --user restart ssl-proxy
-
-# 4. 通知 Partner 使用新 Secret
+# 更新 quadlet/ssl-proxy.container：
+# Environment=JWT_SECRET_PARTNER_A=$NEW_SECRET
+systemctl --user daemon-reload && systemctl --user restart ssl-proxy
+# 通知 Partner 使用新 Secret
 ```
 
 ---
