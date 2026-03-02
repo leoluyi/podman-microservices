@@ -257,139 +257,93 @@ Internal=true  ← 關鍵設定
 
 ---
 
-## Partner JWT 驗證
+## Endpoint 命名與路由設計
 
-### 簡化版配置
+### URL Namespace
 
-#### Nginx 配置（OpenResty）
+三個命名空間對應三類消費者，認證責任各自獨立：
 
-**nginx.conf（Lua 初始化）：**
-
-```nginx
-http {
-    # Lua 配置
-    lua_package_path "/usr/local/openresty/nginx/lua/?.lua;;";
-    lua_shared_dict jwt_cache 10m;
-    
-    # 初始化 JWT
-    init_by_lua_block {
-        jwt = require "resty.jwt"
-        jwt_secret = os.getenv("JWT_SECRET") or "default-secret"
-        ngx.log(ngx.NOTICE, "Partner JWT initialized")
-    }
-    
-    include /etc/nginx/conf.d/*.conf;
-}
+```
+/                          → Frontend SPA（無認證）
+/api/{resource}            → Web/App via BFF（Session 認證，BFF 層）
+/partner/api/{service}/    → Partner B2B（JWT 認證，SSL Proxy 層）
 ```
 
-**routes.conf（Partner JWT 驗證）：**
+Partner API 以 service 再分層，每個 service 直連獨立 Backend：
 
-```nginx
-# Partner API - Order Service
-location /partner/api/order/ {
-    # 簡化的 JWT 驗證（30-40 行）
-    access_by_lua_block {
-        -- 1. 檢查 Authorization Header
-        local auth_header = ngx.var.http_authorization
-        if not auth_header then
-            ngx.log(ngx.ERR, "Missing Authorization from ", ngx.var.remote_addr)
-            ngx.status = 401
-            ngx.say('{"error":"Missing Authorization header"}')
-            return ngx.exit(401)
-        end
-        
-        -- 2. 提取 Token
-        local _, _, token = string.find(auth_header, "Bearer%s+(.+)")
-        if not token then
-            ngx.log(ngx.ERR, "Invalid format from ", ngx.var.remote_addr)
-            ngx.status = 401
-            ngx.say('{"error":"Invalid Authorization format"}')
-            return ngx.exit(401)
-        end
-        
-        -- 3. 驗證 JWT（只檢查簽章和過期）
-        local jwt_obj = jwt:verify(jwt_secret, token)
-        if not jwt_obj.verified then
-            ngx.log(ngx.ERR, "JWT failed: ", jwt_obj.reason)
-            ngx.status = 401
-            ngx.say('{"error":"Invalid or expired token"}')
-            return ngx.exit(401)
-        end
-        
-        -- 4. 提取 Partner ID
-        local partner_id = jwt_obj.payload.sub or "unknown"
-        ngx.req.set_header("X-Partner-ID", partner_id)
-        ngx.log(ngx.INFO, "Authenticated partner=", partner_id)
-    }
-    
-    # 轉發到 Backend
-    proxy_pass http://api-order/;
-    proxy_set_header X-Partner-ID $http_x_partner_id;
-}
+| URL Prefix | Backend 服務 |
+|-----------|-------------|
+| `/partner/api/user/` | `api-user:8080` |
+| `/partner/api/order/` | `api-order:8080` |
+| `/partner/api/product/` | `api-product:8080` |
+
+### 反向代理路由表（SSL Proxy 層）
+
+| 請求路徑 | `proxy_pass` | 路徑重寫 | `access_by_lua_block` |
+|---------|-------------|---------|----------------------|
+| `/` | `frontend:80` | 無 | 無 |
+| `/api/*` | `bff:8080/api/*` | 無 | 無 |
+| `/partner/api/user/*` | `api-user:8080/` | 自動剝除前綴 | JWT + endpoint 權限 |
+| `/partner/api/order/*` | `api-order:8080/` | 自動剝除前綴 | JWT + endpoint 權限 |
+| `/partner/api/product/*` | `api-product:8080/` | 自動剝除前綴 | JWT + endpoint 權限 |
+
+### Frontend 內部路由（frontend nginx 層）
+
+`/` 路徑由 SSL Proxy 轉發至 `frontend:80` 後，frontend nginx 再做第二層路由：
+
+| Location | 行為 |
+|----------|------|
+| `= /health` | 回傳 200，不寫 access log |
+| `~* \.(js\|css\|png\|jpg\|…\|woff2)$` | 提供靜態檔，`Cache-Control: public, immutable`，`expires 1y` |
+| `/`（fallback） | `try_files $uri $uri/ /index.html`，SPA 路由 fallback |
+
+靜態資源快取設為 `immutable`，需搭配 build 工具的 content hash 檔名（如 `main.a1b2c3.js`），確保版本更新時 URL 變動、快取自動失效。
+
+Document root：`/usr/share/nginx/html`。
+
+**路徑剝除機制：** `proxy_pass http://api-order/;`（尾端 `/`）搭配 `location /partner/api/order/`，Nginx 自動移除 location 前綴。
+
+```
+外部請求：  GET /partner/api/order/list
+Backend 收到：GET /list
 ```
 
-### JWT Payload 規格
+### JWT 影響範圍
 
-**必要欄位：**
+`access_by_lua_block` 只掛在 `/partner/api/*` 三個 location，其他路徑完全不受影響：
 
-```json
-{
-  "sub": "partner-company-a",    // Partner ID（必要）
-  "exp": 1735689600              // 過期時間（必要）
-}
+| 路徑 | SSL 終止 | 安全 Headers | JWT 驗證 |
+|------|---------|-------------|---------|
+| `/` | ✓ | ✓ | — |
+| `/api/*` | ✓ | ✓ | — |
+| `/partner/api/*` | ✓ | ✓ | ✓ |
+
+`init_by_lua_block` 在 worker 啟動時預載 `resty.jwt`、`partners-loader` 模組，不介入非 partner 路徑的請求處理。
+
+### Partner JWT 驗證流程
+
+```
+1. 解析 Authorization: Bearer <token>
+2. jwt:load_jwt(token) → 提取 sub（partner_id），不驗證簽章
+3. partners.get_secret(partner_id) → 查詢各 Partner 專屬 secret
+4. jwt:verify(partner_secret, token) → 驗證簽章 + exp
+5. has_endpoint_permission(partner_id, api, path, method)
+   ├─ exact match：  path == "/list"
+   ├─ prefix match： string.sub(path, 1, #pattern) == pattern
+   └─ regex match：  ngx.re.match(path, "^/%d+$")
+6. 通過 → 注入 X-Partner-ID、X-Partner-Name，轉發 Backend
+7. 失敗 → 401 / 403 JSON，不轉發
 ```
 
-**可選欄位：**
+各 Partner 使用獨立 secret（`JWT_SECRET_PARTNER_A/B/C`），單一 secret 洩漏不連帶影響其他 Partner。
 
-```json
-{
-  "iss": "your-auth-service",    // 發行者（建議）
-  "iat": 1735603200              // 發行時間（建議）
-}
-```
+### Partner Endpoint 權限矩陣
 
-### 產生 Partner JWT
-
-```javascript
-// Node.js
-const jwt = require('jsonwebtoken');
-
-const token = jwt.sign(
-  {
-    sub: 'partner-company-a',
-    iss: 'your-auth-service',
-    exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 365) // 1 年
-  },
-  JWT_SECRET,
-  { algorithm: 'HS256' }
-);
-```
-
-### 複雜邏輯在 Backend
-
-Partner 特定的業務邏輯放在 Backend API 處理，不放 Nginx：
-
-```java
-// Backend API-Order
-@GetMapping("/")
-public OrderResponse getOrders(
-    @RequestHeader("X-Partner-ID") String partnerId) {
-    
-    // 在這裡檢查 Partner 權限
-    if (!partnerService.hasAccess(partnerId, "orders")) {
-        throw new ForbiddenException();
-    }
-    
-    // 業務邏輯...
-}
-```
-
-#### 何時需要更複雜的驗證？
-
-以下情況應考慮獨立 Partner Gateway（Go/Java）或遷移到 BFF 統一管理：
-- Partner 數量 >100
-- 需要複雜的角色/權限管理
-- JWT 邏輯需要頻繁變動
+| Partner | orders | products | users |
+|---------|--------|---------|-------|
+| company-a | 讀寫（list / search / create / `{id}` / cancel / items） | 讀寫（含 DELETE） | 唯讀（list / `{id}`） |
+| company-b | 唯讀（list / search / `{id}`） | — | — |
+| company-c | — | 讀寫（無 DELETE） | — |
 
 ---
 
@@ -410,14 +364,21 @@ public OrderResponse getOrders(
 
 ### Frontend (Nginx)
 
-**職責：**
-- 提供靜態檔案
-- SPA 路由支援
-- 簡單的健康檢查
+純靜態檔案服務，HTTP only，不處理任何認證。SSL 終止由 SSL Proxy 負責。
 
-**特點：**
-- 純 HTTP（透過 SSL Proxy 訪問）
-- 不需要 SSL 憑證
+**路由行為（`configs/frontend/nginx.conf`）：**
+
+| Location | 行為 |
+|----------|------|
+| `= /health` | 回傳 200，不寫 access log |
+| `/` | `try_files $uri $uri/ /index.html`（SPA fallback） |
+| `~* \.(js\|css\|png\|…\|woff2)$` | `Cache-Control: public, immutable`，`expires 1y` |
+
+**SPA fallback** 的作用：前端 router（React Router / Vue Router 等）的路徑（如 `/dashboard/123`）不對應實體檔案，Nginx 一律回傳 `index.html`，由前端 JS 接手路由。
+
+**靜態資源快取策略：** `immutable` 表示瀏覽器在 1 年內不重新驗證。實務上需搭配 build 工具的 content hash 檔名（`main.abc123.js`），確保版本更新後 URL 不同，快取自動失效。
+
+**Document root：** `/usr/share/nginx/html`（build 產物掛入此目錄）。
 
 ### BFF Gateway
 

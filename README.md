@@ -281,6 +281,43 @@ podman-microservices/
 ```
 
 
+## Endpoint 命名與路由
+
+### URL Namespace
+
+三個命名空間對應三類消費者，認證責任各自獨立：
+
+| Prefix | 消費者 | 認證責任 |
+|--------|--------|---------|
+| `/` | 瀏覽器（SPA） | 無 |
+| `/api/` | Web / Mobile App | BFF（Session） |
+| `/partner/api/{service}/` | Partner B2B | SSL Proxy（JWT） |
+
+### SSL Proxy 路由表
+
+| 請求路徑 | 代理目標 | JWT 驗證 |
+|---------|---------|---------|
+| `/` | `frontend:80` | 無 |
+| `/api/*` | `bff:8080` | 無（BFF 自行驗 Session） |
+| `/partner/api/user/*` | `api-user:8080` | **有** |
+| `/partner/api/order/*` | `api-order:8080` | **有** |
+| `/partner/api/product/*` | `api-product:8080` | **有** |
+
+JWT 驗證只作用於 `/partner/api/*`，`/` 與 `/api/*` 不受影響。
+
+### Frontend 內部路由（第二跳）
+
+`/` 經 SSL Proxy 轉發到 `frontend:80` 後，frontend nginx 再處理：
+
+| Location | 行為 |
+|----------|------|
+| `= /health` | 健康檢查，200 OK |
+| `~* \.(js\|css\|png\|…\|woff2)$` | 靜態資源，`Cache-Control: public, immutable`，`expires 1y` |
+| `/`（fallback） | `try_files` → `/index.html`，SPA 路由支援 |
+詳細設計見 [docs/ARCHITECTURE.md § Endpoint 命名與路由設計](docs/ARCHITECTURE.md)。
+
+---
+
 ## Token 驗證機制
 
 本專案採用**雙軌驗證**機制，針對不同類型的客戶端使用不同的認證方式：

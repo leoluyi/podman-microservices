@@ -1,0 +1,12 @@
+/opt/app/logs/ssl-proxy/*.log {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    sharedscripts
+    postrotate
+        podman kill --signal USR1 ssl-proxy 2>/dev/null || true
+    endscript
+}

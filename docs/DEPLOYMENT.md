@@ -288,6 +288,38 @@ podman build -t localhost/api-user:latest .
 ./scripts/logs.sh ssl-proxy
 ```
 
+### Log Rotation
+
+各服務的 log 由不同機制管理：
+
+| 服務 | Log 位置 | Rotation 機制 |
+|------|----------|--------------|
+| 所有容器 stdout/stderr | systemd-journald | journald 自動管理（預設 10% 磁碟或 4GB） |
+| `ssl-proxy` nginx file log | `/opt/app/logs/ssl-proxy/` | logrotate（daily，保留 14 天） |
+| `frontend` nginx file log | 容器內部（ephemeral） | 不持久化，容器重啟後清空 |
+
+**ssl-proxy logrotate 設定**
+
+設定檔安裝於 `/etc/logrotate.d/ssl-proxy`，由系統 cron 每日執行。
+
+- `rotate 14`：保留 14 份（約 2 週）
+- `compress` + `delaycompress`：前一份不壓縮，更早的壓縮為 `.gz`
+- `postrotate`：送 `SIGUSR1` 給 ssl-proxy 容器內的 nginx，讓它 reopen log file
+
+手動驗證語法及強制執行一次：
+
+```bash
+# 驗證設定語法
+sudo logrotate -d /etc/logrotate.d/ssl-proxy
+
+# 強制執行一次（不等待明日排程）
+sudo logrotate -f /etc/logrotate.d/ssl-proxy
+
+# 確認 log 仍正常寫入
+ls -lh /opt/app/logs/ssl-proxy/
+curl -k https://localhost/health
+```
+
 ### 備份
 
 ```bash
