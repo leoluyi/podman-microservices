@@ -1,0 +1,69 @@
+{
+  "partners": {
+    "partner-company-a": {
+      "secret_env": "JWT_SECRET_PARTNER_A",
+      "name": "Company A Corp",
+      "permissions": {
+        "orders": {
+          "endpoints": [
+            {"pattern": "/",              "methods": ["GET"]},
+            {"pattern": "/list",          "methods": ["GET"]},
+            {"pattern": "/search",        "methods": ["GET", "POST"]},
+            {"pattern": "/create",        "methods": ["POST"]},
+            {"pattern": "/detail/",       "methods": ["GET"], "prefix": true},
+            {"pattern": "^/\\d+$",        "methods": ["GET", "PUT", "PATCH"], "regex": true},
+            {"pattern": "^/\\d+/cancel$", "methods": ["POST"],       "regex": true},
+            {"pattern": "^/\\d+/items$",  "methods": ["GET"],        "regex": true}
+          ]
+        },
+        "products": {
+          "endpoints": [
+            {"pattern": "/",        "methods": ["GET"]},
+            {"pattern": "/list",    "methods": ["GET"]},
+            {"pattern": "/search",  "methods": ["GET", "POST"]},
+            {"pattern": "/create",  "methods": ["POST"]},
+            {"pattern": "/detail/", "methods": ["GET"], "prefix": true},
+            {"pattern": "^/\\d+$",  "methods": ["GET", "PUT", "PATCH", "DELETE"], "regex": true}
+          ]
+        },
+        "users": {
+          "endpoints": [
+            {"pattern": "/",       "methods": ["GET"]},
+            {"pattern": "/list",   "methods": ["GET"]},
+            {"pattern": "^/\\d+$", "methods": ["GET"], "regex": true}
+          ]
+        }
+      }
+    },
+    "partner-company-b": {
+      "secret_env": "JWT_SECRET_PARTNER_B",
+      "name": "Company B Ltd",
+      "permissions": {
+        "orders": {
+          "endpoints": [
+            {"pattern": "/",       "methods": ["GET"]},
+            {"pattern": "/list",   "methods": ["GET"]},
+            {"pattern": "/search", "methods": ["GET"]},
+            {"pattern": "^/\\d+$", "methods": ["GET"], "regex": true}
+          ]
+        }
+      }
+    },
+    "partner-company-c": {
+      "secret_env": "JWT_SECRET_PARTNER_C",
+      "name": "Company C Inc",
+      "permissions": {
+        "products": {
+          "endpoints": [
+            {"pattern": "/",        "methods": ["GET"]},
+            {"pattern": "/list",    "methods": ["GET"]},
+            {"pattern": "/search",  "methods": ["GET", "POST"]},
+            {"pattern": "/create",  "methods": ["POST"]},
+            {"pattern": "/detail/", "methods": ["GET"], "prefix": true},
+            {"pattern": "^/\\d+$",  "methods": ["GET", "PUT", "PATCH"], "regex": true}
+          ]
+        }
+      }
+    }
+  }
+}

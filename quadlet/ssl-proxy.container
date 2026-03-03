@@ -9,7 +9,7 @@ Wants=frontend.service bff.service api-order.service api-product.service
 # 鏡像配置
 # ============================================================================
 # 使用 OpenResty（Nginx + LuaJIT）
-Image=docker.io/openresty/openresty:alpine
+Image=localhost/ssl-proxy:latest
 
 ContainerName=ssl-proxy
 
@@ -33,9 +33,6 @@ Volume=/opt/app/certs/server.key:/etc/nginx/ssl/server.key:ro
 # 掛載 Nginx 配置
 Volume=/opt/app/configs/ssl-proxy/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
 Volume=/opt/app/configs/ssl-proxy/conf.d:/etc/nginx/conf.d:ro
-
-# 掛載 Lua 模組
-Volume=/opt/app/configs/ssl-proxy/lua:/usr/local/openresty/nginx/lua:ro
 
 # 日誌目錄
 Volume=/opt/app/logs/ssl-proxy:/var/log/nginx:rw
