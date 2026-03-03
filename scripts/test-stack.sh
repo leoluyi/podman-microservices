@@ -230,11 +230,6 @@ start_containers() {
         -e SERVICE_NAME=api-product \
         test-api-product:latest
 
-    # openresty:alpine has no "nginx" user; generate a patched conf without that directive
-    sed '/^user  *nginx;/d' \
-        "$PROJECT_DIR/configs/ssl-proxy/nginx.conf" \
-        > "$CERT_DIR/nginx.conf"
-
     info "Starting $C_SSL_PROXY ..."
     podman run -d --name "$C_SSL_PROXY" \
         --network "$NETWORK" \
@@ -242,7 +237,7 @@ start_containers() {
         -p "${HTTP_PORT}:80" \
         -v "$CERT_DIR/server.crt:/etc/nginx/ssl/server.crt:ro" \
         -v "$CERT_DIR/server.key:/etc/nginx/ssl/server.key:ro" \
-        -v "$CERT_DIR/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro" \
+        -v "$PROJECT_DIR/configs/ssl-proxy/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro" \
         -v "$PROJECT_DIR/configs/ssl-proxy/conf.d:/etc/nginx/conf.d:ro" \
         -v "$LOG_DIR:/var/log/nginx:rw" \
         -e JWT_SECRET_PARTNER_A="dev-secret-partner-a-for-testing-only-32chars" \
@@ -433,31 +428,11 @@ run_T7_nodejs_client() {
         cd "$client_dir"
         API_BASE_URL="https://localhost:${HTTPS_PORT}" \
         PARTNER_ID=partner-company-a \
-        JWT_SECRET_PARTNER_A="dev-secret-partner-a-change-in-production-32chars" \
+        JWT_SECRET_PARTNER_A="dev-secret-partner-a-for-testing-only-32chars" \
         node nodejs-client.js 2>&1
     ) || exit_code=$?
-
-    # Node.js client uses the non-standard dev secret that doesn't match
-    # what partners-loader.lua expects. Provide the correct dev secret.
-    if [[ $exit_code -eq 0 ]]; then
-        pass "[nodejs-client] exited 0"
-    else
-        # Retry with the correct secret
-        exit_code=0
-        output=$(
-            cd "$client_dir"
-            API_BASE_URL="https://localhost:${HTTPS_PORT}" \
-            PARTNER_ID=partner-company-a \
-            JWT_SECRET_PARTNER_A="dev-secret-partner-a-for-testing-only-32chars" \
-            node nodejs-client.js 2>&1
-        ) || exit_code=$?
-        if [[ $exit_code -eq 0 ]]; then
-            pass "[nodejs-client] exited 0"
-        else
-            fail "[nodejs-client] exited $exit_code"
-            echo "$output"
-        fi
-    fi
+    [[ $exit_code -eq 0 ]] && pass "[nodejs-client] exited 0" \
+        || { fail "[nodejs-client] exited $exit_code"; echo "$output"; }
 }
 
 # ─── Summary ──────────────────────────────────────────────────────────────────
