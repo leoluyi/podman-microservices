@@ -1,0 +1,18 @@
+{
+    "version": 0,
+    "requires": {
+        "cockpit": "300"
+    },
+    "menu": {
+        "index": {
+            "label": "微服務監控",
+            "order": 500,
+            "keywords": [
+                {
+                    "matches": ["microservices", "monitor", "podman", "container", "health"]
+                }
+            ]
+        }
+    },
+    "content-security-policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+}

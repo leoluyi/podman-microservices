@@ -106,6 +106,7 @@ Backend APIs
 | 服務 | 容器內部 | 主機端口 | 訪問方式 | 說明 |
 |------|---------|---------|---------|------|
 | **SSL Proxy** | 80, 443 | 80, 443 | 對外開放 | 統一 HTTPS 入口 |
+| **Cockpit** | 9090 | 9090 | 管理網段 | Web 管理介面（Host 服務） |
 | **Frontend** | 80 | - | 內部 | 透過 SSL Proxy 訪問 |
 | **BFF** | 8080 | - | 內部 | 透過 SSL Proxy 訪問 |
 | **API-User** | 8080 | - | 完全隔離 | internal-net only |
@@ -139,6 +140,9 @@ Backend APIs
 
 Debug 端口（開發模式）：
   8101-8103 → Backend APIs（127.0.0.1 綁定）
+
+管理端口：
+  9090      → Cockpit Web 管理介面（Host 層級，非容器）
 
 預留擴展：
   8104-8199 → 未來 Backend APIs
@@ -608,5 +612,24 @@ HealthRetries=3
 Restart=always
 RestartSec=10
 ```
+
+---
+
+## 監控管理
+
+### Cockpit Web 管理介面
+
+本專案整合 [Cockpit](https://cockpit-project.org/) 作為 Web 監控管理工具，安裝於 Host 上（非容器化），由 systemd 的 `cockpit.socket` 管理。
+
+**整合架構：**
+
+| 元件 | 說明 |
+|------|------|
+| cockpit-podman | 內建插件，管理單一容器的啟停、日誌、資源 |
+| microservices-monitor | 自訂插件，提供微服務拓撲視圖與聚合健康儀表板 |
+
+**存取方式**：以 `appuser` 登入 `https://<hostname>:9090`，自動連接該用戶的 rootless Podman socket。
+
+**詳細設定**：參考 [COCKPIT-MONITORING.md](./COCKPIT-MONITORING.md)
 
 

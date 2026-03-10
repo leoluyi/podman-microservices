@@ -194,3 +194,14 @@ cat configs/ha.conf
 # 查看服務狀態摘要
 ./scripts/status.sh
 ```
+
+### Cockpit Web 監控
+
+Cockpit 提供視覺化的容器管理介面，可作為命令列 Debug 工具的補充：
+
+- **容器狀態**：`https://<hostname>:9090` → 以 `appuser` 登入 → Podman 面板
+- **即時日誌**：在 Cockpit Podman 面板中點選容器即可查看即時日誌串流
+- **資源監控**：CPU、記憶體使用量圖表，快速定位資源瓶頸
+- **微服務總覽**：自訂「微服務監控」插件提供所有服務與副本的聚合健康狀態
+
+Cockpit 安裝與設定詳見 [COCKPIT-MONITORING.md](./COCKPIT-MONITORING.md)。

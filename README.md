@@ -37,6 +37,7 @@
 - ✅ **獨立更新部署**：每個服務獨立容器
 - ✅ **多副本負載均衡**：Template Unit + OpenResty upstream
 - ✅ **systemd 依賴管理**：Quadlet 自動處理啟動順序
+- ✅ **Web 監控管理**：Cockpit + 自訂微服務監控插件
 - ✅ **混合 Debug 模式**：開發環境可開啟 localhost 訪問
 
 ## 端口規劃
@@ -53,6 +54,7 @@
 | 服務 | 容器內部 | 主機端口 | 說明 |
 |------|---------|---------|------|
 | **SSL Proxy** | 80, 443 | 80, 443 | 統一 HTTPS 入口 |
+| **Cockpit** | 9090 | 9090 | Web 管理介面（Host 服務） |
 | Frontend | 80 | - (內部) | 透過 SSL Proxy |
 | BFF | 8080 | - (內部) | 透過 SSL Proxy |
 | API-User | 8080 | - | 完全隔離（internal-net）|
@@ -195,7 +197,12 @@ sudo setenforce 0  # 臨時設為 Permissive
 ./scripts/test-connectivity.sh
 ```
 
-### 6. 測試訪問
+### 6. Cockpit Web 監控（可選）
+
+若已安裝 Cockpit，以 `appuser` 登入 `https://<hostname>:9090` 即可使用 Web 管理介面。
+詳見 [Cockpit 監控管理指南](docs/COCKPIT-MONITORING.md)。
+
+### 7. 測試訪問
 
 ```bash
 # 前端（不需驗證）
@@ -274,11 +281,17 @@ podman-microservices/
 │       ├── nodejs-client.js           # Node.js 客戶端範例
 │       └── python-client.py           # Python 客戶端範例
 │
+├── 📁 cockpit/                        # Cockpit 自訂插件
+│   └── microservices-monitor/         # 微服務監控儀表板
+│       ├── manifest.json              # 插件 metadata
+│       └── index.html                 # 監控 UI（單頁應用）
+│
 └── 📁 docs/                           # 詳細文件
     ├── ARCHITECTURE.md                # 架構詳解（含端口規劃）
     ├── DEPLOYMENT.md                  # 部署指南
     ├── PARTNER-INTEGRATION.md         # Partner API 整合指南（含安全架構）
     ├── ENDPOINT-PERMISSIONS.md        # API 端點權限對照表
+    ├── COCKPIT-MONITORING.md          # Cockpit 監控管理指南
     ├── DEBUG.md                       # 故障排除
     └── podman_rootless_min_offline_repo_rhel97_v3.md  # 離線部署指南（Air-Gapped）
 ```
@@ -711,6 +724,7 @@ done
 - [部署指南](docs/DEPLOYMENT.md) - 詳細部署步驟
 - [Partner 整合指南](docs/PARTNER-INTEGRATION.md) - Partner API 設定與整合
 - [Rootless Podman 離線部署](docs/podman_rootless_min_offline_repo_rhel97_v3.md) - Air-Gapped 環境部署指南
+- [Cockpit 監控管理](docs/COCKPIT-MONITORING.md) - Web 監控介面設定與自訂插件
 - [Debug 指南](docs/DEBUG.md) - 故障排除
 
 ## 版本資訊

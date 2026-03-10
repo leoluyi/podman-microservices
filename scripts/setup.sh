@@ -262,7 +262,23 @@ if [ ${#MISSING_IMAGES[@]} -gt 0 ]; then
 fi
 
 # ============================================================================
-# 11. 顯示後續步驟
+# 11. 安裝 Cockpit 自訂插件
+# ============================================================================
+info "安裝 Cockpit 自訂監控插件..."
+
+COCKPIT_PLUGIN_DIR="$HOME/.local/share/cockpit/microservices-monitor"
+mkdir -p "$COCKPIT_PLUGIN_DIR"
+
+if [ -f "cockpit/microservices-monitor/manifest.json" ] && [ -f "cockpit/microservices-monitor/index.html" ]; then
+    cp cockpit/microservices-monitor/manifest.json "$COCKPIT_PLUGIN_DIR/"
+    cp cockpit/microservices-monitor/index.html "$COCKPIT_PLUGIN_DIR/"
+    success "Cockpit 插件已安裝至 $COCKPIT_PLUGIN_DIR"
+else
+    warning "Cockpit 插件原始檔不存在，跳過安裝"
+fi
+
+# ============================================================================
+# 12. 顯示後續步驟
 # ============================================================================
 echo ""
 success "============================================"
@@ -289,6 +305,10 @@ if [ "$MODE" == "dev" ]; then
 fi
 echo "  5. HTTPS 訪問："
 echo "     curl -k https://localhost/"
+echo ""
+echo "  6. Cockpit Web 監控（需先安裝 cockpit + cockpit-podman）："
+echo "     https://<hostname>:9090"
+echo "     詳見 docs/COCKPIT-MONITORING.md"
 echo ""
 
 exit 0

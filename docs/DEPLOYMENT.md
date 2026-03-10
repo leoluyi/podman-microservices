@@ -273,6 +273,32 @@ curl -k -H "Authorization: Bearer $TOKEN" \
 
 **完整說明**：參考 [`PARTNER-INTEGRATION.md`](./PARTNER-INTEGRATION.md) 的「API 提供方：Partner 設定」章節
 
+## Cockpit 監控設定
+
+Cockpit 為 RHEL 內建的 Web 管理介面，搭配 `cockpit-podman` 插件可在瀏覽器管理 Podman 容器。
+
+### 快速啟用
+
+```bash
+# 安裝（連網環境）
+sudo dnf install -y cockpit cockpit-podman
+
+# 啟用
+sudo systemctl enable --now cockpit.socket
+sudo firewall-cmd --permanent --add-service=cockpit
+sudo firewall-cmd --reload
+```
+
+### 存取方式
+
+以 `appuser` 登入 `https://<hostname>:9090`，即可看到該用戶的 rootless 容器。
+
+### 自訂插件
+
+`setup.sh` 會自動將微服務監控插件安裝至 `~/.local/share/cockpit/microservices-monitor/`，提供服務拓撲總覽與聚合健康狀態儀表板。
+
+**完整指南**：參考 [COCKPIT-MONITORING.md](./COCKPIT-MONITORING.md)（含離線安裝、安全設定、權限控制）
+
 ## 故障排除
 
 詳見 `DEBUG.md`

@@ -556,4 +556,14 @@ sudo sed -i '/^appuser:/d' /etc/subuid /etc/subgid
 
 ---
 
+## 附錄：Cockpit 離線安裝
+
+若需在離線環境安裝 Cockpit Web 管理介面（含 cockpit-podman 容器管理插件），請參考：
+
+- [Cockpit 監控管理指南 § 離線安裝](./COCKPIT-MONITORING.md#2-離線安裝指南)
+
+可選擇獨立打包 Cockpit RPM，或在本手冊 §2.4 的 `dnf download` 指令中一併加入 Cockpit 套件。
+
+---
+
 *— End of Document —*

@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>微服務監控</title>
+    <meta charset="utf-8">
+    <link href="../base1/cockpit.css" type="text/css" rel="stylesheet">
+    <script src="../base1/cockpit.js"></script>
+    <style>
+        body {
+            font-family: var(--pf-v5-global--FontFamily--text, "RedHatText", "Noto Sans TC", sans-serif);
+            margin: 0;
+            padding: 16px;
+            background: var(--pf-v5-global--BackgroundColor--100, #fff);
+            color: var(--pf-v5-global--Color--100, #151515);
+        }
+        h2 { margin-top: 0; }
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .toolbar button {
+            padding: 6px 12px;
+            cursor: pointer;
+            border: 1px solid var(--pf-v5-global--BorderColor--100, #d2d2d2);
+            border-radius: 4px;
+            background: var(--pf-v5-global--BackgroundColor--100, #fff);
+        }
+        .toolbar button:hover { background: #f0f0f0; }
+        .auto-refresh-label {
+            font-size: 13px;
+            color: #6a6e73;
+        }
+
+        /* Architecture diagram */
+        .architecture {
+            background: #1e1e2e;
+            color: #cdd6f4;
+            padding: 16px;
+            border-radius: 6px;
+            font-family: "JetBrains Mono", "Fira Code", monospace;
+            font-size: 13px;
+            white-space: pre;
+            overflow-x: auto;
+            margin-bottom: 24px;
+            line-height: 1.4;
+        }
+
+        /* Health dashboard */
+        .health-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .health-card {
+            border: 1px solid var(--pf-v5-global--BorderColor--100, #d2d2d2);
+            border-radius: 6px;
+            padding: 16px;
+            background: var(--pf-v5-global--BackgroundColor--100, #fff);
+        }
+        .health-card h4 {
+            margin: 0 0 8px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .health-card .replicas {
+            font-size: 13px;
+            color: #6a6e73;
+        }
+
+        /* Status indicators */
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 4px;
+        }
+        .status-healthy   { background: #3e8635; }
+        .status-unhealthy { background: #c9190b; }
+        .status-starting  { background: #f0ab00; }
+        .status-unknown   { background: #8a8d90; }
+
+        /* Replica table */
+        .replica-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+            font-size: 13px;
+        }
+        .replica-table td {
+            padding: 4px 8px;
+            border-top: 1px solid #f0f0f0;
+        }
+        .replica-table td:first-child { font-weight: 500; }
+
+        /* Action buttons */
+        .action-btn {
+            padding: 2px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            border: 1px solid #d2d2d2;
+            border-radius: 3px;
+            background: #fff;
+            margin-left: 4px;
+        }
+        .action-btn:hover { background: #f0f0f0; }
+        .action-btn.restart { color: #c9190b; border-color: #c9190b; }
+        .action-btn.restart:hover { background: #fce9e8; }
+
+        /* Log viewer */
+        .log-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .log-modal.open { display: flex; }
+        .log-content {
+            background: #1e1e2e;
+            color: #cdd6f4;
+            width: 80%;
+            max-height: 70vh;
+            border-radius: 8px;
+            overflow: auto;
+            padding: 16px;
+            font-family: monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .log-header h3 { margin: 0; color: #cdd6f4; }
+        .log-close {
+            color: #cdd6f4;
+            cursor: pointer;
+            font-size: 20px;
+            background: none;
+            border: none;
+        }
+
+        /* Loading */
+        .loading { color: #6a6e73; font-style: italic; }
+        .last-updated { font-size: 12px; color: #8a8d90; }
+    </style>
+</head>
+<body>
+    <h2>微服務監控儀表板</h2>
+
+    <div class="toolbar">
+        <button id="btn-refresh" onclick="refreshAll()">重新整理</button>
+        <label class="auto-refresh-label">
+            <input type="checkbox" id="auto-refresh" checked> 自動更新 (30s)
+        </label>
+        <span id="last-updated" class="last-updated"></span>
+    </div>
+
+    <h3>服務架構</h3>
+    <div class="architecture" id="arch-diagram">
+                         ┌── frontend-N:80
+            ┌─ frontend ─┤
+            │             └── ...
+            │
+            │             ┌── bff-N:8080
+SSL Proxy ──┼─ bff ──────┤
+(singleton) │             └── ...
+            │
+            │             ┌── api-user-N:8080
+            ├─ api-user ──┤
+            │             └── ...
+            │
+            │             ┌── api-order-N:8080
+            ├─ api-order ─┤
+            │             └── ...
+            │
+            │             ┌── api-product-N:8080
+            └─ api-product┤
+                          └── ...
+    </div>
+
+    <h3>Health Check 狀態</h3>
+    <div id="health-grid" class="health-grid">
+        <p class="loading">載入中...</p>
+    </div>
+
+    <!-- Log viewer modal -->
+    <div id="log-modal" class="log-modal">
+        <div class="log-content">
+            <div class="log-header">
+                <h3 id="log-title">日誌</h3>
+                <button class="log-close" onclick="closeLog()">&times;</button>
+            </div>
+            <div id="log-output">載入中...</div>
+        </div>
+    </div>
+
+    <script>
+    /* global cockpit */
+
+    var SERVICES = [
+        { name: "ssl-proxy", label: "SSL Proxy", singleton: true },
+        { name: "frontend", label: "Frontend", singleton: false },
+        { name: "bff", label: "BFF Gateway", singleton: false },
+        { name: "api-user", label: "API User", singleton: false },
+        { name: "api-order", label: "API Order", singleton: false },
+        { name: "api-product", label: "API Product", singleton: false }
+    ];
+
+    var refreshTimer = null;
+
+    function refreshAll() {
+        var grid = document.getElementById("health-grid");
+        grid.innerHTML = '<p class="loading">載入中...</p>';
+
+        // List all containers with health info
+        cockpit.spawn(
+            ["podman", "ps", "-a", "--format",
+             "{{.Names}}|{{.Status}}|{{.State}}"],
+            { superuser: false, err: "message" }
+        ).then(function(output) {
+            var containers = {};
+            output.trim().split("\n").forEach(function(line) {
+                if (!line) return;
+                var parts = line.split("|");
+                containers[parts[0]] = {
+                    status: parts[1],
+                    state: parts[2]
+                };
+            });
+            renderHealthGrid(containers);
+            updateTimestamp();
+        }).catch(function(err) {
+            grid.innerHTML = '<p style="color:#c9190b">無法取得容器狀態: ' +
+                             escapeHtml(err.message || String(err)) + '</p>';
+        });
+    }
+
+    function escapeHtml(text) {
+        var div = document.createElement("div");
+        div.appendChild(document.createTextNode(text));
+        return div.innerHTML;
+    }
+
+    function renderHealthGrid(containers) {
+        var grid = document.getElementById("health-grid");
+        grid.innerHTML = "";
+
+        SERVICES.forEach(function(svc) {
+            var card = document.createElement("div");
+            card.className = "health-card";
+
+            if (svc.singleton) {
+                var info = containers[svc.name] || { status: "not found", state: "unknown" };
+                var healthClass = getHealthClass(info);
+                card.innerHTML =
+                    '<h4><span class="status-dot ' + healthClass + '"></span>' +
+                    escapeHtml(svc.label) + '</h4>' +
+                    '<table class="replica-table"><tr>' +
+                    '<td>' + escapeHtml(svc.name) + '</td>' +
+                    '<td>' + escapeHtml(info.status) + '</td>' +
+                    '<td>' +
+                        '<button class="action-btn" onclick="viewLog(\'' + svc.name + '\')">日誌</button>' +
+                        '<button class="action-btn restart" onclick="restartContainer(\'' + svc.name + '\', true)">重啟</button>' +
+                    '</td></tr></table>';
+            } else {
+                // Find all replicas
+                var replicas = [];
+                Object.keys(containers).forEach(function(name) {
+                    if (name.match(new RegExp("^" + svc.name + "-\\d+$"))) {
+                        replicas.push({ name: name, info: containers[name] });
+                    }
+                });
+                replicas.sort(function(a, b) { return a.name.localeCompare(b.name); });
+
+                var overallClass = "status-unknown";
+                if (replicas.length > 0) {
+                    var allHealthy = replicas.every(function(r) {
+                        return getHealthClass(r.info) === "status-healthy";
+                    });
+                    var anyHealthy = replicas.some(function(r) {
+                        return getHealthClass(r.info) === "status-healthy";
+                    });
+                    overallClass = allHealthy ? "status-healthy" :
+                                   anyHealthy ? "status-starting" : "status-unhealthy";
+                }
+
+                var rows = "";
+                replicas.forEach(function(r) {
+                    var hc = getHealthClass(r.info);
+                    rows += '<tr>' +
+                        '<td><span class="status-dot ' + hc + '"></span>' + escapeHtml(r.name) + '</td>' +
+                        '<td>' + escapeHtml(r.info.status) + '</td>' +
+                        '<td>' +
+                            '<button class="action-btn" onclick="viewLog(\'' + r.name + '\')">日誌</button>' +
+                            '<button class="action-btn restart" onclick="restartContainer(\'' + r.name + '\', false)">重啟</button>' +
+                        '</td></tr>';
+                });
+
+                if (replicas.length === 0) {
+                    rows = '<tr><td colspan="3" style="color:#6a6e73">未找到副本</td></tr>';
+                }
+
+                card.innerHTML =
+                    '<h4><span class="status-dot ' + overallClass + '"></span>' +
+                    escapeHtml(svc.label) +
+                    '<span class="replicas">(' + replicas.length + ' 副本)</span></h4>' +
+                    '<table class="replica-table">' + rows + '</table>';
+            }
+
+            grid.appendChild(card);
+        });
+    }
+
+    function getHealthClass(info) {
+        if (!info || info.state === "unknown") return "status-unknown";
+        var s = (info.status || "").toLowerCase();
+        if (s.indexOf("healthy") !== -1 && s.indexOf("unhealthy") === -1) return "status-healthy";
+        if (s.indexOf("unhealthy") !== -1) return "status-unhealthy";
+        if (s.indexOf("starting") !== -1 || s.indexOf("health:") !== -1) return "status-starting";
+        if (info.state === "running") return "status-healthy";
+        if (info.state === "exited" || info.state === "dead") return "status-unhealthy";
+        return "status-unknown";
+    }
+
+    function viewLog(containerName) {
+        document.getElementById("log-modal").className = "log-modal open";
+        document.getElementById("log-title").textContent = containerName + " - 日誌 (最近 200 行)";
+        document.getElementById("log-output").textContent = "載入中...";
+
+        cockpit.spawn(
+            ["podman", "logs", "--tail", "200", containerName],
+            { superuser: false, err: "out" }
+        ).then(function(output) {
+            document.getElementById("log-output").textContent = output || "(空白)";
+        }).catch(function(err) {
+            document.getElementById("log-output").textContent = "錯誤: " + (err.message || String(err));
+        });
+    }
+
+    function closeLog() {
+        document.getElementById("log-modal").className = "log-modal";
+    }
+
+    function restartContainer(containerName, isSingleton) {
+        if (!confirm("確定要重啟 " + containerName + " 嗎?")) return;
+
+        var unitName = isSingleton ? containerName : containerName.replace(/-(\d+)$/, "@$1");
+
+        cockpit.spawn(
+            ["systemctl", "--user", "restart", unitName],
+            { superuser: false, err: "message" }
+        ).then(function() {
+            // Wait a moment for container to start, then refresh
+            setTimeout(refreshAll, 2000);
+        }).catch(function(err) {
+            alert("重啟失敗: " + (err.message || String(err)));
+        });
+    }
+
+    function updateTimestamp() {
+        var now = new Date();
+        var ts = now.getFullYear() + "-" +
+                 String(now.getMonth()+1).padStart(2,"0") + "-" +
+                 String(now.getDate()).padStart(2,"0") + " " +
+                 String(now.getHours()).padStart(2,"0") + ":" +
+                 String(now.getMinutes()).padStart(2,"0") + ":" +
+                 String(now.getSeconds()).padStart(2,"0");
+        document.getElementById("last-updated").textContent = "最後更新: " + ts;
+    }
+
+    function setupAutoRefresh() {
+        var checkbox = document.getElementById("auto-refresh");
+        checkbox.addEventListener("change", function() {
+            if (this.checked) {
+                refreshTimer = setInterval(refreshAll, 30000);
+            } else {
+                clearInterval(refreshTimer);
+                refreshTimer = null;
+            }
+        });
+        refreshTimer = setInterval(refreshAll, 30000);
+    }
+
+    // Initialize
+    cockpit.transport.wait(function() {
+        refreshAll();
+        setupAutoRefresh();
+    });
+    </script>
+</body>
+</html>
