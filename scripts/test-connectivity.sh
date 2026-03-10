@@ -147,7 +147,7 @@ echo ""
 info "=== 網路隔離測試 ==="
 
 # 檢查是否為開發模式
-if [ -f ~/.config/containers/systemd/api-user.container.d/environment.conf ]; then
+if [ -f "$HOME/.config/containers/systemd/api-user@.container.d/environment.conf" ]; then
     MODE="dev"
 else
     MODE="prod"

@@ -49,6 +49,7 @@
 - ✅ **統一 SSL 終止**：憑證只需掛載一處
 - ✅ **分層認證機制**：SSL Proxy 只驗證 Partner JWT，BFF 處理 Session
 - ✅ **完全網路隔離**：Backend APIs 在 internal-net
+- ✅ **多副本負載均衡**：Template Unit + `least_conn` upstream
 - ✅ **內部 HTTP 通訊**：簡化配置，提升效能
 - ✅ **混合 Debug 模式**：開發環境可開啟 localhost 訪問
 
@@ -179,12 +180,12 @@ PublishPort=127.0.0.1:8101:8080
 新增第 4 個 Backend API 範例（api-payment）：
 
 ```ini
-# quadlet/api-payment.container
-PublishPort=${DEBUG_PORT_8104}
+# quadlet/api-payment@.container（template unit）
+ContainerName=api-payment-%i
+Network=internal-net:alias=api-payment
 
-# api-payment.container.d/environment.conf（Dev only）
-[Container]
-Environment=DEBUG_PORT_8104=127.0.0.1:8104:8080
+# configs/ha.conf
+API_PAYMENT_REPLICAS=2
 ```
 
 ---
@@ -416,17 +417,26 @@ Web/Mobile → SSL Proxy (HTTPS) → BFF (HTTP) → Backend APIs (HTTP)
 主機網路 (192.168.1.0/24)
     ↓
     ✗ (無法訪問)
-    
-Internal Network (10.89.0.0/24)
-├─ api-user:     10.89.0.2
-├─ api-order:    10.89.0.3
-├─ api-product:  10.89.0.4
-└─ bff:          10.89.0.5
 
-容器 DNS:
-├─ api-user     → 10.89.0.2
-├─ api-order    → 10.89.0.3
-└─ api-product  → 10.89.0.4
+Internal Network (10.89.0.0/24)
+├─ api-user-1:   10.89.0.2   ─┐
+├─ api-user-2:   10.89.0.3   ─┤ alias=api-user（DNS round-robin）
+├─ api-order-1:  10.89.0.4   ─┐
+├─ api-order-2:  10.89.0.5   ─┤ alias=api-order
+├─ api-product-1:10.89.0.6   ─┐
+├─ api-product-2:10.89.0.7   ─┤ alias=api-product
+├─ bff-1:        10.89.0.8   ─┐
+├─ bff-2:        10.89.0.9   ─┤ alias=bff
+├─ frontend-1:   10.89.0.10  ─┐
+├─ frontend-2:   10.89.0.11  ─┤ alias=frontend
+└─ ssl-proxy:    10.89.0.12     (singleton)
+
+容器 DNS 別名:
+├─ api-user     → [api-user-1, api-user-2]    (round-robin)
+├─ api-order    → [api-order-1, api-order-2]
+├─ api-product  → [api-product-1, api-product-2]
+├─ bff          → [bff-1, bff-2]
+└─ frontend     → [frontend-1, frontend-2]
 ```
 
 ### 訪問矩陣
@@ -478,14 +488,59 @@ Layer 4: 資源限制（容器層）
 
 ## 擴展性
 
-### 水平擴展
+### 多副本架構（單機水平擴展）
 
-**當前架構（單機）：**
+所有 stateless 服務皆使用 **systemd template unit**（`@.container`），支援在同一台主機上運行多個副本。
+
+**架構設計：**
+
 ```
-SSL Proxy (1) → BFF (1) → Backend APIs (N)
+                         ┌── frontend-1:80
+            ┌─ frontend ─┤
+            │            └── frontend-2:80
+            │
+            │            ┌── bff-1:8080
+SSL Proxy ──┼─ bff ──────┤
+(singleton) │            └── bff-2:8080
+            │
+            │            ┌── api-user-1:8080
+            ├─ api-user ─┤
+            │            └── api-user-2:8080
+            │
+            │            ┌── api-order-1:8080
+            ├─ api-order ┤
+            │            └── api-order-2:8080
+            │
+            │            ┌── api-product-1:8080
+            └─ api-product┤
+                          └── api-product-2:8080
 ```
 
-**多節點擴展（未來）：**
+**關鍵機制：**
+
+| 機制 | 說明 |
+|------|------|
+| **Template Unit** | `api-user@.container` 透過 `%i` 產生 `api-user-1`、`api-user-2` 等 instance |
+| **DNS 別名** | `Network=internal-net:alias=api-user`，所有副本共用同一個 DNS 名稱，BFF 可直接透過 `http://api-user:8080` 存取 |
+| **OpenResty LB** | `upstream.conf` 使用 `least_conn` 策略 + 被動健康檢查（`max_fails=3 fail_timeout=30s`） |
+| **副本數設定** | `configs/ha.conf` 集中管理各服務副本數 |
+| **Rolling Restart** | `restart-service.sh` 逐一重啟副本，確保服務不中斷 |
+
+**操作方式：**
+
+```bash
+# 查看當前副本狀態
+./scripts/status.sh
+
+# 動態調整副本數
+./scripts/scale-service.sh api-user 3
+
+# Rolling restart（零中斷）
+./scripts/restart-service.sh api-user
+```
+
+### 多節點擴展（未來）
+
 ```
 Load Balancer
     ↓
@@ -496,28 +551,37 @@ BFF (N)
 Backend APIs (X)
 ```
 
+若需要跨節點的真正 HA（anti-affinity、自動擴縮），建議遷移至 K3s/K8s。
+
 ### 新增服務
 
 1. 建立 Dockerfile
-2. 建立 Quadlet 配置
-3. 更新 SSL Proxy 路由
-4. 部署
+2. 建立 Quadlet 配置（`quadlet/api-xxx@.container`）
+3. 在 `configs/ha.conf` 設定副本數
+4. 在 `configs/ssl-proxy/conf.d/upstream.conf` 新增 upstream 區塊
+5. 更新 SSL Proxy 路由（`routes.conf`）
+6. 更新 `scripts/lib.sh` 中的 `SCALABLE_SERVICES` 陣列
+7. 部署
 
 ---
 
 ## 效能優化
 
-### Keepalive 連接
+### Keepalive 連接與負載均衡
 
 ```nginx
 upstream bff {
-    server bff:8080;
-    keepalive 32;  ← 保持 32 個連接
+    least_conn;                                    # 最少連線數策略
+    server bff-1:8080 max_fails=3 fail_timeout=30s; # 被動健康檢查
+    server bff-2:8080 max_fails=3 fail_timeout=30s;
+    keepalive 32;                                  # 保持 32 個連接
 }
 
 proxy_http_version 1.1;
 proxy_set_header Connection "";
 ```
+
+當某個 instance 連續失敗 3 次，Nginx 自動移除該 backend 30 秒後重試。
 
 ### Gzip 壓縮
 

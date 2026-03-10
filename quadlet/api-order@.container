@@ -1,6 +1,6 @@
 [Unit]
-Description=Product API Service (Exposed via SSL Proxy)
-Documentation=https://github.com/your-org/api-product
+Description=Order API Service - Instance %i
+Documentation=https://github.com/your-org/api-order
 After=internal-net.service
 Requires=internal-net.service
 
@@ -8,27 +8,22 @@ Requires=internal-net.service
 # ============================================================================
 # 鏡像配置
 # ============================================================================
-Image=localhost/api-product:latest
+Image=localhost/api-order:latest
 
-ContainerName=api-product
+ContainerName=api-order-%i
 
 # ============================================================================
 # 網路配置
 # ============================================================================
-Network=internal-net
-
-# Debug 模式端口映射
-PublishPort=${DEBUG_PORT_8103}
+Network=internal-net:alias=api-order
 
 # ============================================================================
 # 環境變數
 # ============================================================================
-Environment=SERVICE_NAME=api-product
+Environment=SERVICE_NAME=api-order
+Environment=SERVICE_INSTANCE=%i
 Environment=SERVICE_PORT=8080
 Environment=ENVIRONMENT=production
-
-# 資料庫連線由 environment.conf 提供（dev/prod 分開管理）
-# 請複製 api-product.container.d/environment.conf.example 並填入實際值
 
 # ============================================================================
 # 健康檢查
@@ -61,7 +56,8 @@ LogDriver=journald
 # 標籤
 # ============================================================================
 Label=app=microservices
-Label=service=api-product
+Label=service=api-order
+Label=instance=%i
 Label=tier=backend
 Label=public-access=true
 Label=exposed-via=ssl-proxy

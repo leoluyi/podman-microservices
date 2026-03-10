@@ -35,6 +35,7 @@
 - ✅ **完全網路隔離**：Backend APIs 在 internal-net
 - ✅ **內部 HTTP 通訊**：簡化配置，提升效能
 - ✅ **獨立更新部署**：每個服務獨立容器
+- ✅ **多副本負載均衡**：Template Unit + OpenResty upstream
 - ✅ **systemd 依賴管理**：Quadlet 自動處理啟動順序
 - ✅ **混合 Debug 模式**：開發環境可開啟 localhost 訪問
 
@@ -224,15 +225,16 @@ podman-microservices/
 │
 ├── 📁 quadlet/                        # Systemd Quadlet 服務定義
 │   ├── internal-net.network           # 內部隔離網路定義
-│   ├── ssl-proxy.container            # SSL Termination Proxy
-│   ├── frontend.container             # Frontend 服務
-│   ├── bff.container                  # BFF Gateway 服務
-│   ├── api-user.container             # User API
-│   ├── api-order.container            # Order API
-│   ├── api-product.container          # Product API
-│   └── *.container.d/                 # Debug 環境變數（開發模式）
+│   ├── ssl-proxy.container            # SSL Termination Proxy（singleton）
+│   ├── frontend@.container            # Frontend 服務（template unit，多副本）
+│   ├── bff@.container                 # BFF Gateway 服務（template unit）
+│   ├── api-user@.container            # User API（template unit）
+│   ├── api-order@.container           # Order API（template unit）
+│   ├── api-product@.container         # Product API（template unit）
+│   └── *@.container.d/               # 環境變數覆蓋（開發模式）
 │
 ├── 📁 configs/                        # 配置檔
+│   ├── ha.conf                        # 高可用配置（各服務副本數）
 │   ├── images.env                     # 容器鏡像定義
 │   ├── ssl-proxy/                     # SSL Proxy 配置
 │   │   ├── nginx.conf                 # 主配置（OpenResty + Lua）
@@ -259,8 +261,9 @@ podman-microservices/
 │   ├── start-all.sh                   # 啟動所有服務
 │   ├── stop-all.sh                    # 停止所有服務
 │   ├── status.sh                      # 查看服務狀態
-│   ├── restart-service.sh             # 重啟單一服務
-│   ├── logs.sh                        # 查看服務日誌
+│   ├── restart-service.sh             # 重啟服務（支援 rolling restart）
+│   ├── scale-service.sh              # 動態調整服務副本數
+│   ├── logs.sh                        # 查看服務日誌（支援多副本）
 │   ├── test-connectivity.sh           # 連通性測試
 │   ├── generate-certs.sh              # 產生自簽 SSL 憑證
 │   └── generate-jwt.sh                # 產生 JWT Token（Partner 可用）
@@ -401,14 +404,23 @@ done
 ### 服務管理
 
 ```bash
-# 查看所有服務狀態
+# 查看所有服務狀態（含各副本）
 ./scripts/status.sh
 
-# 重啟單一服務
+# Rolling restart（逐一重啟副本，零中斷）
 ./scripts/restart-service.sh api-order
 
-# 查看日誌
-./scripts/logs.sh ssl-proxy
+# 重啟指定副本
+./scripts/restart-service.sh api-order 1
+
+# 動態調整副本數
+./scripts/scale-service.sh api-user 3
+
+# 查看日誌（所有副本）
+./scripts/logs.sh api-user
+
+# 查看特定副本日誌
+./scripts/logs.sh api-user 1
 ```
 
 ### 更新憑證
@@ -436,8 +448,8 @@ curl http://localhost:8103/health  # API-Product
 # 透過 SSL Proxy
 curl -k https://localhost/api/users
 
-# 或進入容器
-podman exec -it api-order curl http://localhost:8080/health
+# 或進入特定副本容器
+podman exec -it api-order-1 curl http://localhost:8080/health
 ```
 
 ## 安全建議
@@ -526,10 +538,12 @@ echo $TOKEN | cut -d. -f2 | base64 -d 2>/dev/null  # 解碼查看 payload
 ### 新增 Backend API
 
 1. 複製 Dockerfile：`dockerfiles/api-user` → `dockerfiles/api-newservice`
-2. 複製 Quadlet 配置：`quadlet/api-user.container` → `quadlet/api-newservice.container`
-3. 修改配置中的服務名稱和端口
-4. 更新 BFF 配置以包含新服務
-5. 啟動新服務
+2. 複製 Quadlet 配置：`quadlet/api-user@.container` → `quadlet/api-newservice@.container`
+3. 修改配置中的服務名稱（ContainerName、Label 等）
+4. 在 `configs/ha.conf` 加入 `API_NEWSERVICE_REPLICAS=2`
+5. 在 `configs/ssl-proxy/conf.d/upstream.conf` 加入新的 upstream 區塊
+6. 更新 BFF 配置以包含新服務
+7. 啟動新服務
 
 ## 離線環境部署（Air-Gapped）
 
@@ -712,4 +726,4 @@ MIT License
 
 ---
 
-**最後更新：2026-03-02**
+**最後更新：2026-03-10**

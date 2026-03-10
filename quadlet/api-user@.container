@@ -1,5 +1,5 @@
 [Unit]
-Description=User API Service (Internal Only)
+Description=User API Service - Instance %i
 Documentation=https://github.com/your-org/api-user
 After=internal-net.service
 Requires=internal-net.service
@@ -8,41 +8,30 @@ Requires=internal-net.service
 # ============================================================================
 # 鏡像配置
 # ============================================================================
-# 替換成你的實際鏡像
-# 範例：使用本地建置的鏡像
 Image=localhost/api-user:latest
 
-ContainerName=api-user
+ContainerName=api-user-%i
 
 # ============================================================================
 # 網路配置
 # ============================================================================
-# 只連接內部隔離網路
-Network=internal-net
+# 連接內部隔離網路，並設定 DNS 別名讓所有副本共用 "api-user" 名稱
+# 其他服務（如 BFF）可直接透過 http://api-user:8080 訪問，
+# Podman DNS 會自動 round-robin 到各副本
+Network=internal-net:alias=api-user
 
-# Debug 模式端口映射（由環境變數控制）
-# 生產環境：不設定此參數，完全隔離
-# 開發環境：透過 .container.d/environment.conf 設定
-PublishPort=${DEBUG_PORT_8101}
+# 多副本模式下不映射 debug port（避免衝突）
+# 如需 debug 單一 instance，透過 podman exec 進入
 
 # ============================================================================
 # 環境變數
 # ============================================================================
 Environment=SERVICE_NAME=api-user
+Environment=SERVICE_INSTANCE=%i
 Environment=SERVICE_PORT=8080
 Environment=ENVIRONMENT=production
 
-# Java 應用程式設定（如適用）
-# Environment=JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC
-
 # 資料庫連線由 environment.conf 提供（dev/prod 分開管理）
-# 請複製 api-user.container.d/environment.conf.example 並填入實際值
-
-# ============================================================================
-# Volume 掛載
-# ============================================================================
-# Volume=/opt/app/api-user/config:/app/config:ro
-# Volume=/opt/app/api-user/logs:/app/logs:rw
 
 # ============================================================================
 # 健康檢查
@@ -76,6 +65,7 @@ LogDriver=journald
 # ============================================================================
 Label=app=microservices
 Label=service=api-user
+Label=instance=%i
 Label=tier=backend
 Label=public-access=false
 

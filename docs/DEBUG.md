@@ -4,18 +4,23 @@
 
 ### 1. 容器日誌（所有服務）
 
-所有服務的 stdout/stderr 都經由 journald 收集。
+所有服務的 stdout/stderr 都經由 journald 收集。多副本服務使用 `@` 格式的 systemd unit。
 
 ```bash
-# 查看最新 100 筆，持續追蹤
-journalctl --user -u ssl-proxy -n 100 -f
+# 查看特定副本日誌
+journalctl --user -u api-user@1 -n 100 -f
 
-# 使用 wrapper script（預設 50 行，自動帶 -f）
-./scripts/logs.sh ssl-proxy
-./scripts/logs.sh bff 200
+# 查看同一服務所有副本
+journalctl --user -u "api-user@*" -n 100 -f
+
+# 使用 wrapper script
+./scripts/logs.sh api-user         # 所有副本
+./scripts/logs.sh api-user 1       # 指定副本
+./scripts/logs.sh api-user 1 200   # 指定副本，最近 200 行
+./scripts/logs.sh ssl-proxy        # singleton 服務
 ```
 
-可用服務名稱：`ssl-proxy`、`frontend`、`bff`、`api-user`、`api-order`、`api-product`
+可用服務：`ssl-proxy`、`frontend`、`bff`、`api-user`、`api-order`、`api-product`
 
 ### 2. SSL Proxy Nginx 日誌
 
@@ -51,9 +56,9 @@ $remote_addr - $jwt_user_id [$time_local] "$request_method $uri" $status $body_b
 Frontend 容器內部的 Nginx 日誌（`/var/log/nginx/`）沒有 volume mount，為 ephemeral storage，容器重啟後消失。
 
 ```bash
-# 僅在容器存活時可讀取
-podman exec frontend cat /var/log/nginx/access.log
-podman exec frontend tail -f /var/log/nginx/error.log
+# 指定副本查看（僅在容器存活時可讀取）
+podman exec frontend-1 cat /var/log/nginx/access.log
+podman exec frontend-2 tail -f /var/log/nginx/error.log
 ```
 
 ---
@@ -63,14 +68,14 @@ podman exec frontend tail -f /var/log/nginx/error.log
 ### 1. 服務無法啟動
 
 ```bash
-# 查看服務狀態
-systemctl --user status <service-name>
+# 查看服務狀態（多副本使用 @N 格式）
+systemctl --user status api-user@1
 
 # 查看詳細日誌
-journalctl --user -u <service-name> -n 100
+journalctl --user -u api-user@1 -n 100
 
 # 確認容器是否存在
-podman ps -a
+podman ps -a --filter "label=service=api-user"
 ```
 
 常見原因：鏡像不存在、端口衝突、volume 路徑不存在、權限問題。
@@ -105,9 +110,10 @@ tail -50 /opt/app/logs/ssl-proxy/error.log | grep -i "partner\|permission\|403"
 
 **生產模式：** 預期行為，Backend API 不對外暴露，應透過 SSL Proxy 訪問。
 
-**開發模式：**
+**開發模式：** 多副本模式下不映射 debug port，改用 `podman exec` 進入容器：
+
 ```bash
-curl http://localhost:8101/health
+podman exec -it api-user-1 curl http://localhost:8080/health
 ```
 
 ### 5. SSL 憑證錯誤
@@ -117,6 +123,37 @@ curl http://localhost:8101/health
 ./scripts/restart-service.sh ssl-proxy
 ```
 
+### 6. 某個副本異常但其他正常
+
+```bash
+# 查看特定副本狀態
+systemctl --user status api-user@2
+
+# 查看該副本日誌
+./scripts/logs.sh api-user 2
+
+# 只重啟有問題的副本（不影響其他副本）
+./scripts/restart-service.sh api-user 2
+```
+
+### 7. 負載均衡未生效
+
+確認 `upstream.conf` 中的 server 名稱與實際容器名稱一致：
+
+```bash
+# 檢查容器名稱
+podman ps --filter "label=service=api-user" --format '{{.Names}}'
+# 預期輸出：api-user-1, api-user-2
+
+# 確認 upstream.conf
+cat configs/ssl-proxy/conf.d/upstream.conf | grep "api-user"
+# 預期：server api-user-1:8080 ...
+#       server api-user-2:8080 ...
+
+# 重新載入 ssl-proxy 配置（不需重啟容器）
+podman exec ssl-proxy nginx -s reload
+```
+
 ---
 
 ## Debug 工具
@@ -124,19 +161,36 @@ curl http://localhost:8101/health
 ### 檢查容器與網路
 
 ```bash
-# 查看所有容器狀態
-podman ps -a
+# 查看所有容器狀態（含副本）
+podman ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 # 查看網路
 podman network ls
 podman network inspect internal-net
 
-# 測試容器間通訊
-podman exec bff curl http://api-user:8080/health
+# 測試容器間通訊（指定副本）
+podman exec bff-1 curl http://api-user-1:8080/health
+
+# 透過 DNS 別名測試（round-robin）
+podman exec bff-1 curl http://api-user:8080/health
 ```
 
 ### 進入容器
 
 ```bash
-podman exec -it api-user /bin/sh
+# 指定副本
+podman exec -it api-user-1 /bin/sh
+
+# 查看特定服務的所有副本
+podman ps --filter "label=service=api-user"
+```
+
+### 檢查副本配置
+
+```bash
+# 查看目前的副本設定
+cat configs/ha.conf
+
+# 查看服務狀態摘要
+./scripts/status.sh
 ```

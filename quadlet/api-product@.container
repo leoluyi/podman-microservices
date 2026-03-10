@@ -1,6 +1,6 @@
 [Unit]
-Description=Frontend Service (HTTP only, behind SSL Proxy)
-Documentation=https://github.com/your-org/frontend
+Description=Product API Service - Instance %i
+Documentation=https://github.com/your-org/api-product
 After=internal-net.service
 Requires=internal-net.service
 
@@ -8,44 +8,31 @@ Requires=internal-net.service
 # ============================================================================
 # 鏡像配置
 # ============================================================================
-# 替換成你的前端鏡像
-Image=docker.io/library/nginx:alpine
-# 或使用本地建置的鏡像
-# Image=localhost/frontend:latest
+Image=localhost/api-product:latest
 
-ContainerName=frontend
+ContainerName=api-product-%i
 
 # ============================================================================
 # 網路配置
 # ============================================================================
-# 連接到 internal-net 以便 SSL Proxy 可透過容器名稱訪問
-Network=internal-net
-
-# 不需要 PublishPort，完全內部訪問
-
-# ============================================================================
-# Volume 掛載
-# ============================================================================
-# 掛載 Nginx 配置（簡化版，只 HTTP）
-Volume=/opt/app/configs/frontend/nginx.conf:/etc/nginx/nginx.conf:ro
-
-# 掛載靜態檔案（如需要）
-# Volume=/opt/app/frontend/dist:/usr/share/nginx/html:ro
+Network=internal-net:alias=api-product
 
 # ============================================================================
 # 環境變數
 # ============================================================================
-Environment=NGINX_HOST=localhost
-Environment=NGINX_PORT=80
+Environment=SERVICE_NAME=api-product
+Environment=SERVICE_INSTANCE=%i
+Environment=SERVICE_PORT=8080
+Environment=ENVIRONMENT=production
 
 # ============================================================================
 # 健康檢查
 # ============================================================================
-HealthCmd=curl -f http://localhost/health || exit 1
+HealthCmd=curl -f http://localhost:8080/health || exit 1
 HealthInterval=30s
 HealthTimeout=10s
 HealthRetries=3
-HealthStartPeriod=10s
+HealthStartPeriod=30s
 
 # ============================================================================
 # 重啟策略
@@ -56,9 +43,9 @@ RestartSec=10
 # ============================================================================
 # 資源限制
 # ============================================================================
-Memory=256M
-MemorySwap=256M
-CPUQuota=25%
+Memory=512M
+MemorySwap=512M
+CPUQuota=50%
 
 # ============================================================================
 # 日誌配置
@@ -69,11 +56,14 @@ LogDriver=journald
 # 標籤
 # ============================================================================
 Label=app=microservices
-Label=service=frontend
-Label=tier=presentation
+Label=service=api-product
+Label=instance=%i
+Label=tier=backend
+Label=public-access=true
+Label=exposed-via=ssl-proxy
 
 [Service]
-TimeoutStartSec=60
+TimeoutStartSec=120
 TimeoutStopSec=30
 Restart=on-failure
 RestartSec=10

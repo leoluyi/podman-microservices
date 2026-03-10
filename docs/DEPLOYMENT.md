@@ -130,8 +130,16 @@ sudo firewall-cmd --reload
 ### 5. 啟用開機自啟動
 
 ```bash
-systemctl --user enable ssl-proxy frontend bff
-systemctl --user enable api-user api-order api-product
+# Singleton 服務
+systemctl --user enable ssl-proxy
+
+# Template unit 服務（各副本需個別 enable）
+# 副本數依 configs/ha.conf 設定，預設 2
+for svc in api-user api-order api-product bff frontend; do
+    for i in 1 2; do
+        systemctl --user enable "${svc}@${i}"
+    done
+done
 ```
 
 ## Partner API 管理
@@ -278,14 +286,32 @@ curl -k -H "Authorization: Bearer $TOKEN" \
 cd dockerfiles/api-user
 podman build -t localhost/api-user:latest .
 
-# 重啟服務
+# Rolling restart（逐一重啟副本，零中斷）
 ./scripts/restart-service.sh api-user
+
+# 或只重啟指定副本
+./scripts/restart-service.sh api-user 1
+```
+
+### 調整副本數
+
+```bash
+# 擴展 api-user 到 3 副本
+./scripts/scale-service.sh api-user 3
+
+# 注意：調整後需同步更新 upstream.conf 並 reload ssl-proxy
+# 1. 編輯 configs/ssl-proxy/conf.d/upstream.conf 加入 api-user-3:8080
+# 2. podman exec ssl-proxy nginx -s reload
 ```
 
 ### 查看日誌
 
 ```bash
-./scripts/logs.sh ssl-proxy
+# 查看所有副本日誌
+./scripts/logs.sh api-user
+
+# 查看特定副本
+./scripts/logs.sh api-user 1
 ```
 
 ### Log Rotation

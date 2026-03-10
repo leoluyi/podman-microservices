@@ -1,18 +1,46 @@
 #!/bin/bash
-# 查看所有服務狀態
-SERVICES=("internal-net" "ssl-proxy" "frontend" "bff" "api-user" "api-order" "api-product")
+# ============================================================================
+# 查看所有服務狀態（含多副本）
+# ============================================================================
+
+source "$(dirname "$0")/lib.sh"
+
 echo "服務狀態："
 echo "=========================================="
-for service in "${SERVICES[@]}"; do
-    status=$(systemctl --user is-active "$service" 2>/dev/null || echo "inactive")
-    if [ "$status" = "active" ]; then
-        echo "  ✓ $service: 🟢 ACTIVE"
-    else
-        echo "  ✗ $service: 🔴 $status"
-    fi
+
+# 網路
+status=$(systemctl --user is-active "internal-net" 2>/dev/null || echo "inactive")
+if [ "$status" = "active" ]; then
+    echo "  ✓ internal-net: ACTIVE"
+else
+    echo "  ✗ internal-net: $status"
+fi
+
+echo "---"
+
+# 可擴展服務
+for service in "${SCALABLE_SERVICES[@]}"; do
+    show_service_status "$service"
 done
+
+echo "---"
+
+# Singleton 服務
+for service in "${SINGLETON_SERVICES[@]}"; do
+    show_service_status "$service"
+done
+
 echo "=========================================="
 echo ""
+
+# 副本配置摘要
+echo "副本配置（configs/ha.conf）："
+for service in "${SCALABLE_SERVICES[@]}"; do
+    replicas=$(get_replicas "$service")
+    echo "  $service: ${replicas} 副本"
+done
+echo ""
+
 echo "詳細狀態："
-echo "  systemctl --user status <service-name>"
+echo "  systemctl --user status <service-name>@<instance>"
 exit 0

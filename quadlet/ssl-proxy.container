@@ -1,8 +1,9 @@
 [Unit]
 Description=SSL Termination Proxy with Unified Token Verification
 Documentation=https://github.com/your-org/microservices
-After=internal-net.service frontend.service bff.service
-Wants=frontend.service bff.service api-order.service api-product.service
+After=internal-net.service
+Requires=internal-net.service
+# 各服務副本由 start-all.sh 按順序啟動，不在此宣告個別 instance 依賴
 
 [Container]
 # ============================================================================

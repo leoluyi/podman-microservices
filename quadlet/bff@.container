@@ -1,6 +1,6 @@
 [Unit]
-Description=Order API Service (Exposed via SSL Proxy)
-Documentation=https://github.com/your-org/api-order
+Description=BFF (Backend For Frontend) Gateway - Instance %i
+Documentation=https://github.com/your-org/bff-service
 After=internal-net.service
 Requires=internal-net.service
 
@@ -8,27 +8,27 @@ Requires=internal-net.service
 # ============================================================================
 # 鏡像配置
 # ============================================================================
-Image=localhost/api-order:latest
+Image=localhost/bff:latest
 
-ContainerName=api-order
+ContainerName=bff-%i
 
 # ============================================================================
 # 網路配置
 # ============================================================================
-Network=internal-net
-
-# Debug 模式端口映射
-PublishPort=${DEBUG_PORT_8102}
+Network=internal-net:alias=bff
 
 # ============================================================================
 # 環境變數
 # ============================================================================
-Environment=SERVICE_NAME=api-order
+Environment=SERVICE_NAME=bff
+Environment=SERVICE_INSTANCE=%i
 Environment=SERVICE_PORT=8080
 Environment=ENVIRONMENT=production
 
-# 資料庫連線由 environment.conf 提供（dev/prod 分開管理）
-# 請複製 api-order.container.d/environment.conf.example 並填入實際值
+# Backend API 端點（透過 DNS 別名，自動 round-robin 到各副本）
+Environment=API_USER_URL=http://api-user:8080
+Environment=API_ORDER_URL=http://api-order:8080
+Environment=API_PRODUCT_URL=http://api-product:8080
 
 # ============================================================================
 # 健康檢查
@@ -61,10 +61,10 @@ LogDriver=journald
 # 標籤
 # ============================================================================
 Label=app=microservices
-Label=service=api-order
-Label=tier=backend
-Label=public-access=true
-Label=exposed-via=ssl-proxy
+Label=service=bff
+Label=instance=%i
+Label=tier=gateway
+Label=role=backend-for-frontend
 
 [Service]
 TimeoutStartSec=120

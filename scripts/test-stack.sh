@@ -188,13 +188,13 @@ build_images() {
 start_containers() {
     section "Starting Containers"
 
-    # upstream.conf resolves plain names: frontend, bff, api-user, api-order, api-product.
-    # The containers are named test-*, so we register each under its logical alias.
+    # upstream.conf resolves names: frontend-1, bff-1, api-user-1, etc.
+    # Test uses single instance per service; upstream health check handles missing -2.
 
     info "Starting $C_FRONTEND ..."
     podman run -d --name "$C_FRONTEND" \
         --network "$NETWORK" \
-        --network-alias frontend \
+        --network-alias frontend-1 \
         -e SERVICE_NAME=frontend \
         -e SERVICE_PORT=80 \
         test-frontend:latest
@@ -202,31 +202,31 @@ start_containers() {
     info "Starting $C_BFF ..."
     podman run -d --name "$C_BFF" \
         --network "$NETWORK" \
-        --network-alias bff \
+        --network-alias bff-1 \
         -p "${BFF_HOST_PORT}:8080" \
-        -e API_USER_URL="http://api-user:8080" \
-        -e API_ORDER_URL="http://api-order:8080" \
-        -e API_PRODUCT_URL="http://api-product:8080" \
+        -e API_USER_URL="http://api-user-1:8080" \
+        -e API_ORDER_URL="http://api-order-1:8080" \
+        -e API_PRODUCT_URL="http://api-product-1:8080" \
         test-bff:latest
 
     info "Starting $C_API_USER ..."
     podman run -d --name "$C_API_USER" \
         --network "$NETWORK" \
-        --network-alias api-user \
+        --network-alias api-user-1 \
         -e SERVICE_NAME=api-user \
         test-api-user:latest
 
     info "Starting $C_API_ORDER ..."
     podman run -d --name "$C_API_ORDER" \
         --network "$NETWORK" \
-        --network-alias api-order \
+        --network-alias api-order-1 \
         -e SERVICE_NAME=api-order \
         test-api-order:latest
 
     info "Starting $C_API_PRODUCT ..."
     podman run -d --name "$C_API_PRODUCT" \
         --network "$NETWORK" \
-        --network-alias api-product \
+        --network-alias api-product-1 \
         -e SERVICE_NAME=api-product \
         test-api-product:latest
 
