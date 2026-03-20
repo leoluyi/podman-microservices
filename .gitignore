@@ -6,9 +6,11 @@
 
 ### Node ###
 # Note: portal-web package.json and package-lock.json should be tracked
-# Only ignore root-level copies if any
+# Only ignore root-level and example copies
 /package-lock.json
 /package.json
+examples/partner-clients/package.json
+examples/partner-clients/package-lock.json
 
 # Logs
 logs
