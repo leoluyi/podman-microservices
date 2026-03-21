@@ -16,6 +16,10 @@ warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
 PASSED=0
 FAILED=0
 
+# Host port mappings (align with ssl-proxy Quadlet / local-start.sh)
+HTTPS_PORT="${HTTPS_PORT:-8443}"
+HTTP_PORT="${HTTP_PORT:-8080}"
+
 # ============================================================================
 # 測試函數
 # ============================================================================
@@ -61,14 +65,14 @@ echo ""
 
 # 1. SSL Proxy 健康檢查
 info "=== SSL Proxy ==="
-test_endpoint "HTTPS 健康檢查" "https://localhost/health"
-test_endpoint "HTTP 重定向" "http://localhost/" 301
+test_endpoint "HTTPS 健康檢查" "https://localhost:${HTTPS_PORT}/health"
+test_endpoint "HTTP 重定向" "http://localhost:${HTTP_PORT}/" 301
 
 echo ""
 
 # 2. 前端訪問
 info "=== Frontend ==="
-test_endpoint "前端首頁" "https://localhost/"
+test_endpoint "前端首頁" "https://localhost:${HTTPS_PORT}/"
 
 echo ""
 
@@ -77,7 +81,7 @@ info "=== Web/App API (轉發至 BFF) ==="
 info "注意：SSL Proxy 不驗證 /api/* 端點，認證由 BFF 處理"
 
 # 測試端點可達性（BFF 應該返回 401 或其他認證錯誤）
-test_endpoint "API 可達性測試" "https://localhost/api/users" 401
+test_endpoint "API 可達性測試" "https://localhost:${HTTPS_PORT}/api/users" 401
 
 echo ""
 
@@ -90,15 +94,15 @@ if [ -f "./scripts/generate-jwt.sh" ]; then
     if PARTNER_A_TOKEN=$(./scripts/generate-jwt.sh partner-company-a 2>/dev/null); then
         # Token 生成成功
         test_endpoint "Partner A: Orders API (有權限)" \
-            "https://localhost/partner/api/order/" 200 \
+            "https://localhost:${HTTPS_PORT}/partner/api/order/" 200 \
             "Authorization: Bearer $PARTNER_A_TOKEN"
 
         test_endpoint "Partner A: Products API (有權限)" \
-            "https://localhost/partner/api/product/" 200 \
+            "https://localhost:${HTTPS_PORT}/partner/api/product/" 200 \
             "Authorization: Bearer $PARTNER_A_TOKEN"
 
         test_endpoint "Partner A: Users API (有權限)" \
-            "https://localhost/partner/api/user/" 200 \
+            "https://localhost:${HTTPS_PORT}/partner/api/user/" 200 \
             "Authorization: Bearer $PARTNER_A_TOKEN"
     else
         warn "Partner A Token 生成失敗，請確認 generate-jwt.sh 可執行"
@@ -109,11 +113,11 @@ if [ -f "./scripts/generate-jwt.sh" ]; then
     if PARTNER_B_TOKEN=$(./scripts/generate-jwt.sh partner-company-b 2>/dev/null); then
         # Token 生成成功
         test_endpoint "Partner B: Orders API (有權限)" \
-            "https://localhost/partner/api/order/" 200 \
+            "https://localhost:${HTTPS_PORT}/partner/api/order/" 200 \
             "Authorization: Bearer $PARTNER_B_TOKEN"
 
         test_endpoint "Partner B: Products API (無權限，預期 403)" \
-            "https://localhost/partner/api/product/" 403 \
+            "https://localhost:${HTTPS_PORT}/partner/api/product/" 403 \
             "Authorization: Bearer $PARTNER_B_TOKEN"
     else
         warn "Partner B Token 生成失敗，請確認 generate-jwt.sh 可執行"
@@ -124,11 +128,11 @@ if [ -f "./scripts/generate-jwt.sh" ]; then
     if PARTNER_C_TOKEN=$(./scripts/generate-jwt.sh partner-company-c 2>/dev/null); then
         # Token 生成成功
         test_endpoint "Partner C: Products API (有權限)" \
-            "https://localhost/partner/api/product/" 200 \
+            "https://localhost:${HTTPS_PORT}/partner/api/product/" 200 \
             "Authorization: Bearer $PARTNER_C_TOKEN"
 
         test_endpoint "Partner C: Orders API (無權限，預期 403)" \
-            "https://localhost/partner/api/order/" 403 \
+            "https://localhost:${HTTPS_PORT}/partner/api/order/" 403 \
             "Authorization: Bearer $PARTNER_C_TOKEN"
     else
         warn "Partner C Token 生成失敗，請確認 generate-jwt.sh 可執行"
@@ -139,7 +143,7 @@ fi
 
 # 測試無 Token
 test_endpoint "Partner API (無 Token，預期 401)" \
-    "https://localhost/partner/api/order/" 401
+    "https://localhost:${HTTPS_PORT}/partner/api/order/" 401
 
 echo ""
 

@@ -6,7 +6,7 @@
 
 ```
                     ┌─────────────────────────────┐
-外部 HTTPS :443 →  │  SSL Termination Proxy      │
+外部 HTTPS :8443 → │  SSL Termination Proxy      │
                     │  (OpenResty)                │
                     │  - 統一 SSL 終止             │
                     │  - 統一 JWT 驗證             │

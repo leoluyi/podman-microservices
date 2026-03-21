@@ -20,9 +20,9 @@ ContainerName=ssl-proxy
 # 連接到 internal-net 以訪問 Backend APIs（如需直接訪問）
 Network=internal-net
 
-# 對外暴露 HTTP 和 HTTPS
-PublishPort=80:80
-PublishPort=443:443
+# 對外暴露 HTTP 和 HTTPS（使用高位 port 以支援 rootless podman）
+PublishPort=8080:80
+PublishPort=8443:443
 
 # ============================================================================
 # Volume 掛載

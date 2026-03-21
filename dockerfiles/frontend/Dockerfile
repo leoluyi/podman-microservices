@@ -1,7 +1,7 @@
 # Frontend Dockerfile
 # Base: SUSE BCI Nginx
 
-FROM registry.suse.com/bci/nginx:1.21
+FROM registry.suse.com/suse/nginx:1.21
 
 LABEL maintainer="your-team@example.com"
 LABEL description="Frontend Static Website"

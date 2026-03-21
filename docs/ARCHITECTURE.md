@@ -158,7 +158,7 @@ Debug 端口（開發模式）：
 
 ```ini
 # 綁定所有網路介面（不安全，只用於對外服務）
-PublishPort=443:443
+PublishPort=8443:443
 
 # 只綁定 localhost（安全，用於 Debug）
 PublishPort=127.0.0.1:8101:8080
