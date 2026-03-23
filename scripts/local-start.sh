@@ -130,7 +130,8 @@ build_images() {
 
     info "Building frontend ..."
     podman build -t "$FRONTEND_IMAGE" \
-        "$PROJECT_ROOT/dockerfiles/frontend" --quiet
+        -f "$PROJECT_ROOT/dockerfiles/frontend/Dockerfile" \
+        "$PROJECT_ROOT" --quiet
 
     info "Building ssl-proxy ..."
     podman build -t "$SSL_PROXY_IMAGE" \
@@ -193,6 +194,7 @@ start_bff() {
 start_frontend() {
     section "Frontend"
     start_replicas frontend "$FRONTEND_IMAGE" 80 \
+        -v "$PROJECT_ROOT/configs/frontend/nginx.conf:/etc/nginx/nginx.conf:ro" \
         -e NGINX_HOST=localhost \
         -e NGINX_PORT=80
 }

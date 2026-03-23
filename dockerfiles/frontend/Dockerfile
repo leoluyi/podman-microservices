@@ -133,8 +133,8 @@ RUN cat > /usr/share/nginx/html/health.html << 'EOF'
 OK
 EOF
 
-# 複製 Nginx 配置（將使用 Volume 掛載）
-# 這裡不需要複製，因為會透過 Quadlet Volume 掛載
+# 複製 Nginx 配置（作為預設值，可透過 Volume 掛載覆蓋）
+COPY configs/frontend/nginx.conf /etc/nginx/nginx.conf
 
 EXPOSE 80
 
