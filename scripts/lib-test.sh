@@ -59,6 +59,9 @@ get_auth_token() {
 # ─── Readiness ───────────────────────────────────────────────────────────────
 
 # wait_for_services <timeout_seconds> <service_names...>
+# Polls container logs for Spring Boot "Started" message every 2s.
+# (Podman on macOS does not propagate Dockerfile HEALTHCHECK to containers
+#  started via `podman run`, so we cannot use `podman inspect` health status.)
 wait_for_services() {
     local timeout=$1; shift
     local services=("$@")
@@ -66,28 +69,24 @@ wait_for_services() {
     local elapsed=0
     local total=${#services[@]}
 
-    info "Waiting for $total services to become healthy (${timeout}s timeout) ..."
+    info "Waiting for $total services to become ready (${timeout}s timeout) ..."
     while [[ $elapsed -lt $timeout ]]; do
         ready=0
         for svc in "${services[@]}"; do
-            local health
-            health=$(podman inspect --format '{{.State.Health.Status}}' "$svc" 2>/dev/null || echo "unknown")
-            [[ "$health" == "healthy" ]] && ready=$((ready + 1))
+            podman logs "$svc" 2>&1 | grep -q "Started.*Application" && ready=$((ready + 1))
         done
         if [[ $ready -ge $total ]]; then
-            success "All $total services healthy (${elapsed}s)"
+            success "All $total services ready (${elapsed}s)"
             return 0
         fi
         sleep 2
         elapsed=$((elapsed + 2))
-        [[ $((elapsed % 10)) -eq 0 ]] && info "  $ready/$total healthy (${elapsed}s) ..."
+        [[ $((elapsed % 10)) -eq 0 ]] && info "  $ready/$total ready (${elapsed}s) ..."
     done
 
-    fail_msg "Only $ready/$total services healthy after ${timeout}s"
+    fail_msg "Only $ready/$total services ready after ${timeout}s"
     for svc in "${services[@]}"; do
-        local health
-        health=$(podman inspect --format '{{.State.Health.Status}}' "$svc" 2>/dev/null || echo "unknown")
-        [[ "$health" != "healthy" ]] && warning "  $svc: $health"
+        podman logs "$svc" 2>&1 | grep -q "Started.*Application" || warning "  $svc: not ready"
     done
     return 1
 }
