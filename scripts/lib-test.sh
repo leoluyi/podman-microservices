@@ -73,7 +73,7 @@ wait_for_services() {
     while [[ $elapsed -lt $timeout ]]; do
         ready=0
         for svc in "${services[@]}"; do
-            podman logs "$svc" 2>&1 | grep -q "Started.*Application" && ready=$((ready + 1))
+            { timeout 3 podman logs "$svc" 2>&1 || true; } 2>/dev/null | grep -q "Started.*Application" && ready=$((ready + 1))
         done
         if [[ $ready -ge $total ]]; then
             success "All $total services ready (${elapsed}s)"
@@ -86,7 +86,7 @@ wait_for_services() {
 
     fail_msg "Only $ready/$total services ready after ${timeout}s"
     for svc in "${services[@]}"; do
-        podman logs "$svc" 2>&1 | grep -q "Started.*Application" || warning "  $svc: not ready"
+        { timeout 3 podman logs "$svc" 2>&1 || true; } 2>/dev/null | grep -q "Started.*Application" || warning "  $svc: not ready"
     done
     return 1
 }
