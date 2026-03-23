@@ -161,3 +161,13 @@ build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
+
+# Secrets
+secrets/
+
+# Java
+services/*/target/
+
+# Node
+services/frontend/node_modules/
+services/frontend/dist/
