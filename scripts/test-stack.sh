@@ -51,19 +51,8 @@ fi
 
 "$SCRIPT_DIR/local-start.sh" 2>&1 | grep -E "(SUCCESS|ERROR|Building|started|is up)"
 
-# Wait for all Spring Boot services to be ready
-info "Waiting for Spring Boot services to initialize ..."
-_timeout=90; _elapsed=0
-while [[ $_elapsed -lt $_timeout ]]; do
-    _ready=0
-    for svc in api-auth-1 api-order-1 api-user-1 api-product-1 bff-1; do
-        podman logs "$svc" 2>&1 | grep -q "Started.*Application" && _ready=$((_ready+1))
-    done
-    [[ $_ready -ge 5 ]] && break
-    sleep 5
-    _elapsed=$((_elapsed+5))
-    info "  $_ready/5 services ready (${_elapsed}s) ..."
-done
+# Wait for all Spring Boot services to be healthy via Podman healthcheck
+wait_for_services 120 api-auth-1 api-order-1 api-user-1 api-product-1 bff-1
 
 # ─── T1: Infrastructure ─────────────────────────────────────────────────────
 run_T1_infra() {

@@ -56,6 +56,42 @@ get_auth_token() {
         | python3 -c "import sys,json; print(json.load(sys.stdin).get('accessToken',''))" 2>/dev/null
 }
 
+# ─── Readiness ───────────────────────────────────────────────────────────────
+
+# wait_for_services <timeout_seconds> <service_names...>
+wait_for_services() {
+    local timeout=$1; shift
+    local services=("$@")
+    local ready=0
+    local elapsed=0
+    local total=${#services[@]}
+
+    info "Waiting for $total services to become healthy (${timeout}s timeout) ..."
+    while [[ $elapsed -lt $timeout ]]; do
+        ready=0
+        for svc in "${services[@]}"; do
+            local health
+            health=$(podman inspect --format '{{.State.Health.Status}}' "$svc" 2>/dev/null || echo "unknown")
+            [[ "$health" == "healthy" ]] && ready=$((ready + 1))
+        done
+        if [[ $ready -ge $total ]]; then
+            success "All $total services healthy (${elapsed}s)"
+            return 0
+        fi
+        sleep 2
+        elapsed=$((elapsed + 2))
+        [[ $((elapsed % 10)) -eq 0 ]] && info "  $ready/$total healthy (${elapsed}s) ..."
+    done
+
+    fail_msg "Only $ready/$total services healthy after ${timeout}s"
+    for svc in "${services[@]}"; do
+        local health
+        health=$(podman inspect --format '{{.State.Health.Status}}' "$svc" 2>/dev/null || echo "unknown")
+        [[ "$health" != "healthy" ]] && warning "  $svc: $health"
+    done
+    return 1
+}
+
 # ─── Summary ─────────────────────────────────────────────────────────────────
 
 print_summary() {
