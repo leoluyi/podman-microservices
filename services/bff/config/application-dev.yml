@@ -1,0 +1,4 @@
+logging:
+  level:
+    com.example: DEBUG
+    org.springframework.cloud.gateway: DEBUG
