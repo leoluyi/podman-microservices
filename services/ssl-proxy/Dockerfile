@@ -1,14 +1,16 @@
-FROM docker.io/openresty/openresty:1.27.1.2-0-alpine
+FROM docker.io/openresty/openresty:alpine
 
-# Install Lua JWT dependencies
-RUN apk add --no-cache gcc musl-dev \
-    && /usr/local/openresty/luajit/bin/luarocks install lua-resty-jwt 0.2.3 \
-    && apk del gcc musl-dev
+# Install lua-resty-jwt via opm
+RUN apk add --no-cache perl curl && \
+    opm install SkyLothar/lua-resty-jwt && \
+    apk del perl curl
 
 # Nginx configuration
 COPY services/ssl-proxy/nginx.conf /usr/local/openresty/nginx/conf/nginx.conf
 COPY services/ssl-proxy/conf.d/ /etc/nginx/conf.d/
 COPY services/ssl-proxy/lua/ /usr/local/openresty/site/lualib/
+RUN chmod 644 /usr/local/openresty/site/lualib/partner-auth.lua \
+              /usr/local/openresty/site/lualib/partners-loader.lua
 
 # SSL certificates are volume-mounted at runtime (never baked into image)
 

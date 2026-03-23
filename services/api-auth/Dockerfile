@@ -3,9 +3,9 @@ WORKDIR /build
 COPY pom.xml ./pom.xml
 RUN mvn -N install -q -B
 COPY api-auth/pom.xml ./api-auth/pom.xml
-RUN mvn -pl api-auth dependency:go-offline -q -B
+RUN mvn -f api-auth/pom.xml dependency:go-offline -q -B
 COPY api-auth/src ./api-auth/src
-RUN mvn -pl api-auth package -DskipTests -q -B
+RUN mvn -f api-auth/pom.xml package -DskipTests -q -B
 
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app

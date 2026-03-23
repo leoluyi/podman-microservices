@@ -39,12 +39,8 @@ spring:
           filters:
             - StripPrefix=1
             - JwtAuth
-  config:
-    import:
-      - optional:file:/run/secrets/jwt-signing-key.properties
-
 jwt:
-  signing-key: ${jwt.signing-key:dev-jwt-secret-key-minimum-32-characters-long!!}
+  signing-key: ${JWT_SIGNING_KEY:dev-jwt-secret-key-minimum-32-characters-long!!}
 
 management:
   endpoints:

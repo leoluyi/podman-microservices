@@ -25,7 +25,7 @@ WHERE r.name = 'ROLE_USER' AND p.action = 'read';
 
 -- Seed admin user (BCrypt hash of 'admin123')
 INSERT INTO users (username, password, email) VALUES
-    ('admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'admin@example.com');
+    ('admin', '$2a$10$zW/T2/p3Ooa2RbLmLC/ZDuwsMPebx/bxh3fuWupr6z9NVnomNaiQG', 'admin@example.com');
 
 INSERT INTO user_roles (user_id, role_id)
 SELECT u.id, r.id FROM users u, roles r WHERE u.username = 'admin' AND r.name = 'ROLE_ADMIN';

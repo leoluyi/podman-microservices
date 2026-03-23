@@ -18,10 +18,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @Component
-public class JwtAuthFilter extends AbstractGatewayFilterFactory<JwtAuthFilter.Config> {
+public class JwtAuthGatewayFilterFactory extends AbstractGatewayFilterFactory<JwtAuthGatewayFilterFactory.Config> {
     private final JwtParser jwtParser;
 
-    public JwtAuthFilter(@Value("${jwt.signing-key}") String secret) {
+    public JwtAuthGatewayFilterFactory(@Value("${jwt.signing-key}") String secret) {
         super(Config.class);
         SecretKey key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.jwtParser = Jwts.parser().verifyWith(key).build();

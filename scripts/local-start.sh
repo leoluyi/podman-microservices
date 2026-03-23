@@ -176,15 +176,15 @@ start_replicas() {
     done
 }
 
-# Helper: start a Spring Boot service with config mounts
+# Helper: start a Spring Boot service with config mounts and env secrets
 start_spring_service() {
     local service=$1 image=$2
     shift 2
     start_replicas "$service" "$image" 8080 \
         -e SPRING_PROFILES_ACTIVE=dev \
+        -e DB_PASSWORD="$(cat "$PROJECT_ROOT/secrets/db-password")" \
+        -e JWT_SIGNING_KEY="$(cat "$PROJECT_ROOT/secrets/jwt-signing-key")" \
         -v "$PROJECT_ROOT/services/${service}/config/application-dev.yml:/app/config/application-dev.yml:ro" \
-        -v "$PROJECT_ROOT/secrets/db-password.properties:/run/secrets/db-password.properties:ro" \
-        -v "$PROJECT_ROOT/secrets/jwt-signing-key.properties:/run/secrets/jwt-signing-key.properties:ro" \
         "$@"
 }
 
@@ -201,7 +201,7 @@ start_postgres() {
         --network-alias postgres \
         --label "$LABEL" \
         -e POSTGRES_PASSWORD="$(cat "$PROJECT_ROOT/secrets/postgres-password")" \
-        -e APP_USER_PASSWORD="$(grep -oP '(?<=spring.datasource.password=).*' "$PROJECT_ROOT/secrets/db-password.properties")" \
+        -e APP_USER_PASSWORD="$(cat "$PROJECT_ROOT/secrets/db-password")" \
         -v "$PROJECT_ROOT/configs/postgres/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro" \
         -v "pgdata:/var/lib/postgresql/data" \
         "$POSTGRES_IMAGE"

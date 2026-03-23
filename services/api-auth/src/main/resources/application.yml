@@ -9,6 +9,7 @@ spring:
   datasource:
     url: jdbc:postgresql://postgres:5432/microservices
     username: app_user
+    password: ${DB_PASSWORD:dev-password-change-me}
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
@@ -18,10 +19,9 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
-  config:
-    import:
-      - optional:file:/run/secrets/db-password.properties
-      - optional:file:/run/secrets/jwt-signing-key.properties
+    baseline-on-migrate: true
+    baseline-version: 0
+    table: flyway_schema_history_auth
 
 management:
   endpoints:
@@ -35,6 +35,6 @@ logging:
     com.example: INFO
 
 jwt:
-  signing-key: ${jwt.signing-key:dev-jwt-secret-key-minimum-32-characters-long!!}
+  signing-key: ${JWT_SIGNING_KEY:dev-jwt-secret-key-minimum-32-characters-long!!}
   expiration-ms: 900000
   refresh-expiration-ms: 604800000
