@@ -1,0 +1,40 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-auth
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  datasource:
+    url: jdbc:postgresql://postgres:5432/microservices
+    username: app_user
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  config:
+    import:
+      - optional:file:/run/secrets/db-password.properties
+      - optional:file:/run/secrets/jwt-signing-key.properties
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    root: INFO
+    com.example: INFO
+
+jwt:
+  signing-key: ${jwt.signing-key:dev-jwt-secret-key-minimum-32-characters-long!!}
+  expiration-ms: 900000
+  refresh-expiration-ms: 604800000

@@ -1,0 +1,9 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/microservices_dev
+  jpa:
+    show-sql: true
+logging:
+  level:
+    com.example: DEBUG
+    org.springframework.security: DEBUG
