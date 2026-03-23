@@ -21,10 +21,10 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 HA_CONF="$PROJECT_ROOT/configs/ha.conf"
 
 # 可擴展的服務清單（template units，使用 @ 格式）
-SCALABLE_SERVICES=("api-user" "api-order" "api-product" "bff" "frontend")
+SCALABLE_SERVICES=("api-user" "api-order" "api-product" "api-auth" "bff" "frontend")
 
 # 不可擴展的服務（singleton）
-SINGLETON_SERVICES=("ssl-proxy")
+SINGLETON_SERVICES=("ssl-proxy" "postgres")
 
 # 所有服務
 ALL_SERVICES=("${SCALABLE_SERVICES[@]}" "${SINGLETON_SERVICES[@]}")

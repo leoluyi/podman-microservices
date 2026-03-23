@@ -12,7 +12,6 @@ set -euo pipefail
 
 source "$(dirname "$0")/lib.sh"
 
-# Load image names from configs/images.env
 # shellcheck source=../configs/images.env
 source "$PROJECT_ROOT/configs/images.env"
 
@@ -21,11 +20,9 @@ CERT_DIR="$PROJECT_ROOT/certs"
 LOG_DIR="$PROJECT_ROOT/logs/ssl-proxy"
 LABEL="app=microservices"
 
-# Host port mappings (high ports to avoid rootless privilege issues on macOS)
 HTTPS_PORT="${HTTPS_PORT:-8443}"
 HTTP_PORT="${HTTP_PORT:-8080}"
 
-# ─── Colour / section helper ────────────────────────────────────────────────
 CYAN='\033[0;36m'
 section() { echo -e "\n${CYAN}== $* ==${NC}"; }
 
@@ -112,30 +109,39 @@ ensure_log_dir() {
 build_images() {
     section "Building Images"
 
+    info "Building api-auth ..."
+    podman build -t "$API_AUTH_IMAGE" \
+        -f "$PROJECT_ROOT/services/api-auth/Dockerfile" \
+        "$PROJECT_ROOT/services" --quiet
+
     info "Building api-user ..."
     podman build -t "$API_USER_IMAGE" \
-        "$PROJECT_ROOT/dockerfiles/api-user" --quiet
+        -f "$PROJECT_ROOT/services/api-user/Dockerfile" \
+        "$PROJECT_ROOT/services" --quiet
 
     info "Building api-order ..."
     podman build -t "$API_ORDER_IMAGE" \
-        "$PROJECT_ROOT/dockerfiles/api-order" --quiet
+        -f "$PROJECT_ROOT/services/api-order/Dockerfile" \
+        "$PROJECT_ROOT/services" --quiet
 
     info "Building api-product ..."
     podman build -t "$API_PRODUCT_IMAGE" \
-        "$PROJECT_ROOT/dockerfiles/api-product" --quiet
+        -f "$PROJECT_ROOT/services/api-product/Dockerfile" \
+        "$PROJECT_ROOT/services" --quiet
 
     info "Building bff ..."
     podman build -t "$BFF_IMAGE" \
-        "$PROJECT_ROOT/dockerfiles/bff" --quiet
+        -f "$PROJECT_ROOT/services/bff/Dockerfile" \
+        "$PROJECT_ROOT/services" --quiet
 
     info "Building frontend ..."
     podman build -t "$FRONTEND_IMAGE" \
-        -f "$PROJECT_ROOT/dockerfiles/frontend/Dockerfile" \
+        -f "$PROJECT_ROOT/services/frontend/Dockerfile" \
         "$PROJECT_ROOT" --quiet
 
     info "Building ssl-proxy ..."
     podman build -t "$SSL_PROXY_IMAGE" \
-        -f "$PROJECT_ROOT/dockerfiles/ssl-proxy/Dockerfile" \
+        -f "$PROJECT_ROOT/services/ssl-proxy/Dockerfile" \
         "$PROJECT_ROOT" --quiet
 
     success "All images built"
@@ -143,11 +149,6 @@ build_images() {
 
 # ─── Container startup helpers ──────────────────────────────────────────────
 
-# Start N replicas of a scalable service.
-# Each container gets two network aliases:
-#   - "{service}-{i}" (instance-specific, used by upstream.conf)
-#   - "{service}"     (generic, enables DNS round-robin for BFF)
-# Usage: start_replicas <service> <image> <port> [extra podman args...]
 start_replicas() {
     local service=$1 image=$2 port=$3
     shift 3
@@ -175,26 +176,59 @@ start_replicas() {
     done
 }
 
+# Helper: start a Spring Boot service with config mounts
+start_spring_service() {
+    local service=$1 image=$2
+    shift 2
+    start_replicas "$service" "$image" 8080 \
+        -e SPRING_PROFILES_ACTIVE=dev \
+        -v "$PROJECT_ROOT/services/${service}/config/application-dev.yml:/app/config/application-dev.yml:ro" \
+        -v "$PROJECT_ROOT/secrets/db-password.properties:/run/secrets/db-password.properties:ro" \
+        -v "$PROJECT_ROOT/secrets/jwt-signing-key.properties:/run/secrets/jwt-signing-key.properties:ro" \
+        "$@"
+}
+
+start_postgres() {
+    section "PostgreSQL"
+    local name="postgres"
+    if podman container exists "$name" 2>/dev/null; then
+        warning "$name already running, skipping"
+        return
+    fi
+    info "Starting $name ..."
+    podman run -d --name "$name" \
+        --network "$NETWORK" \
+        --network-alias postgres \
+        --label "$LABEL" \
+        -e POSTGRES_PASSWORD="$(cat "$PROJECT_ROOT/secrets/postgres-password")" \
+        -e APP_USER_PASSWORD="$(grep -oP '(?<=spring.datasource.password=).*' "$PROJECT_ROOT/secrets/db-password.properties")" \
+        -v "$PROJECT_ROOT/configs/postgres/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro" \
+        -v "pgdata:/var/lib/postgresql/data" \
+        "$POSTGRES_IMAGE"
+    success "$name started"
+}
+
+start_auth() {
+    section "Auth Service"
+    start_spring_service api-auth "$API_AUTH_IMAGE"
+}
+
 start_api_services() {
     section "API Services"
-    start_replicas api-user    "$API_USER_IMAGE"    8080
-    start_replicas api-order   "$API_ORDER_IMAGE"   8080
-    start_replicas api-product "$API_PRODUCT_IMAGE" 8080
+    start_spring_service api-user    "$API_USER_IMAGE"
+    start_spring_service api-order   "$API_ORDER_IMAGE"
+    start_spring_service api-product "$API_PRODUCT_IMAGE"
 }
 
 start_bff() {
     section "BFF Gateway"
-    # BFF uses generic DNS aliases (e.g., "api-user") for round-robin across replicas
-    start_replicas bff "$BFF_IMAGE" 8080 \
-        -e API_USER_URL="http://api-user:8080" \
-        -e API_ORDER_URL="http://api-order:8080" \
-        -e API_PRODUCT_URL="http://api-product:8080"
+    start_spring_service bff "$BFF_IMAGE"
 }
 
 start_frontend() {
     section "Frontend"
     start_replicas frontend "$FRONTEND_IMAGE" 80 \
-        -v "$PROJECT_ROOT/configs/frontend/nginx.conf:/etc/nginx/nginx.conf:ro" \
+        -v "$PROJECT_ROOT/services/frontend/nginx.conf:/etc/nginx/nginx.conf:ro" \
         -e NGINX_HOST=localhost \
         -e NGINX_PORT=80
 }
@@ -228,7 +262,7 @@ start_ssl_proxy() {
 # ─── Health checks ──────────────────────────────────────────────────────────
 wait_for_health() {
     section "Health Checks"
-    local timeout=60
+    local timeout=120
 
     wait_http() {
         local label=$1 url=$2 elapsed=0
@@ -244,8 +278,22 @@ wait_for_health() {
         success "$label is up"
     }
 
+    wait_tcp() {
+        local label=$1 host=$2 port=$3 elapsed=0
+        info "Waiting for $label ..."
+        while ! podman exec postgres pg_isready -U postgres -q 2>/dev/null; do
+            sleep 2
+            elapsed=$((elapsed + 2))
+            if [[ $elapsed -ge $timeout ]]; then
+                error "$label did not become healthy within ${timeout}s"
+                return 1
+            fi
+        done
+        success "$label is up"
+    }
+
+    wait_tcp "PostgreSQL" localhost 5432
     wait_http "ssl-proxy (HTTPS)" "https://localhost:${HTTPS_PORT}/health"
-    wait_http "ssl-proxy (HTTP)"  "http://localhost:${HTTP_PORT}/"
 }
 
 # ─── Main ───────────────────────────────────────────────────────────────────
@@ -262,6 +310,8 @@ main() {
     create_network
     build_images
 
+    start_postgres
+    start_auth
     start_api_services
     start_bff
     start_frontend

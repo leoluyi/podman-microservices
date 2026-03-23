@@ -65,7 +65,16 @@ main() {
     stop_replicas api-order
     stop_replicas api-user
 
-    # 4. Catch any remaining labeled containers
+    # 4. Auth service
+    section "Auth Service"
+    stop_replicas api-auth
+
+    # 5. PostgreSQL
+    section "PostgreSQL"
+    info "Stopping postgres ..."
+    remove_container postgres
+
+    # 6. Catch any remaining labeled containers
     local remaining
     remaining=$(podman ps -a --filter "label=$LABEL" --format "{{.Names}}" 2>/dev/null || true)
     if [[ -n "$remaining" ]]; then
@@ -75,7 +84,7 @@ main() {
         done <<< "$remaining"
     fi
 
-    # 5. Network
+    # 7. Network
     section "Network"
     if podman network exists "$NETWORK" 2>/dev/null; then
         podman network rm "$NETWORK" >/dev/null 2>&1 || true
