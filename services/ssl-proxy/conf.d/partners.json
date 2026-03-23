@@ -6,31 +6,23 @@
       "permissions": {
         "orders": {
           "endpoints": [
-            {"pattern": "/",              "methods": ["GET"]},
-            {"pattern": "/list",          "methods": ["GET"]},
-            {"pattern": "/search",        "methods": ["GET", "POST"]},
-            {"pattern": "/create",        "methods": ["POST"]},
-            {"pattern": "/detail/",       "methods": ["GET"], "prefix": true},
-            {"pattern": "^/\\d+$",        "methods": ["GET", "PUT", "PATCH"], "regex": true},
-            {"pattern": "^/\\d+/cancel$", "methods": ["POST"],       "regex": true},
-            {"pattern": "^/\\d+/items$",  "methods": ["GET"],        "regex": true}
+            {"pattern": "/health",                "methods": ["GET"]},
+            {"pattern": "/orders/stats",          "methods": ["GET"]},
+            {"pattern": "/orders",                "methods": ["GET", "POST"]},
+            {"pattern": "^/orders/\\d+$",         "methods": ["GET", "DELETE"], "regex": true},
+            {"pattern": "^/orders/\\d+/status$",  "methods": ["PATCH"],        "regex": true}
           ]
         },
         "products": {
           "endpoints": [
-            {"pattern": "/",        "methods": ["GET"]},
-            {"pattern": "/list",    "methods": ["GET"]},
-            {"pattern": "/search",  "methods": ["GET", "POST"]},
-            {"pattern": "/create",  "methods": ["POST"]},
-            {"pattern": "/detail/", "methods": ["GET"], "prefix": true},
-            {"pattern": "^/\\d+$",  "methods": ["GET", "PUT", "PATCH", "DELETE"], "regex": true}
+            {"pattern": "/health", "methods": ["GET"]},
+            {"pattern": "/",       "methods": ["GET"]}
           ]
         },
         "users": {
           "endpoints": [
-            {"pattern": "/",       "methods": ["GET"]},
-            {"pattern": "/list",   "methods": ["GET"]},
-            {"pattern": "^/\\d+$", "methods": ["GET"], "regex": true}
+            {"pattern": "/health", "methods": ["GET"]},
+            {"pattern": "/",       "methods": ["GET"]}
           ]
         }
       }
@@ -41,10 +33,10 @@
       "permissions": {
         "orders": {
           "endpoints": [
-            {"pattern": "/",       "methods": ["GET"]},
-            {"pattern": "/list",   "methods": ["GET"]},
-            {"pattern": "/search", "methods": ["GET"]},
-            {"pattern": "^/\\d+$", "methods": ["GET"], "regex": true}
+            {"pattern": "/health",         "methods": ["GET"]},
+            {"pattern": "/orders/stats",   "methods": ["GET"]},
+            {"pattern": "/orders",         "methods": ["GET", "POST"]},
+            {"pattern": "^/orders/\\d+$",  "methods": ["GET"], "regex": true}
           ]
         }
       }
@@ -53,14 +45,18 @@
       "secret_env": "JWT_SECRET_PARTNER_C",
       "name": "Company C Inc",
       "permissions": {
+        "orders": {
+          "endpoints": [
+            {"pattern": "/health",         "methods": ["GET"]},
+            {"pattern": "/orders/stats",   "methods": ["GET"]},
+            {"pattern": "/orders",         "methods": ["GET"]},
+            {"pattern": "^/orders/\\d+$",  "methods": ["GET"], "regex": true}
+          ]
+        },
         "products": {
           "endpoints": [
-            {"pattern": "/",        "methods": ["GET"]},
-            {"pattern": "/list",    "methods": ["GET"]},
-            {"pattern": "/search",  "methods": ["GET", "POST"]},
-            {"pattern": "/create",  "methods": ["POST"]},
-            {"pattern": "/detail/", "methods": ["GET"], "prefix": true},
-            {"pattern": "^/\\d+$",  "methods": ["GET", "PUT", "PATCH"], "regex": true}
+            {"pattern": "/health", "methods": ["GET"]},
+            {"pattern": "/",       "methods": ["GET"]}
           ]
         }
       }

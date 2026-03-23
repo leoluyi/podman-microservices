@@ -8,7 +8,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class OrderService {
@@ -54,6 +56,24 @@ public class OrderService {
         order.setUpdatedAt(LocalDateTime.now());
         Order saved = orderRepository.save(order);
         return toResponse(saved);
+    }
+
+    @Transactional
+    public void delete(Long id) {
+        if (!orderRepository.existsById(id)) {
+            throw new RuntimeException("Order not found: " + id);
+        }
+        orderRepository.deleteById(id);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Long> getStats() {
+        List<Object[]> results = orderRepository.countByStatusGrouped();
+        Map<String, Long> stats = new LinkedHashMap<>();
+        for (Object[] row : results) {
+            stats.put((String) row[0], (Long) row[1]);
+        }
+        return stats;
     }
 
     private String generateOrderNumber() {

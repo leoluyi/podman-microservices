@@ -41,6 +41,11 @@ public class OrderController {
         return orderService.list(caller.id(), caller.source());
     }
 
+    @GetMapping("/orders/stats")
+    public Map<String, Object> getStats() {
+        return Map.of("stats", orderService.getStats());
+    }
+
     @GetMapping("/orders/{id}")
     public OrderResponse getById(@PathVariable Long id) {
         return orderService.getById(id);
@@ -49,6 +54,12 @@ public class OrderController {
     @PatchMapping("/orders/{id}/status")
     public OrderResponse updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         return orderService.updateStatus(id, body.get("status"));
+    }
+
+    @DeleteMapping("/orders/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        orderService.delete(id);
+        return ResponseEntity.noContent().build();
     }
 
     private record CallerInfo(String id, String source) {}
