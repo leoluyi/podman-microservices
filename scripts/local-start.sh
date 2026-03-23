@@ -147,6 +147,25 @@ build_images() {
     success "All images built"
 }
 
+# ─── Volume mount permissions ──────────────────────────────────────────────
+# Rootless podman on macOS maps host UIDs differently inside containers.
+# Files bind-mounted with :ro must be world-readable so the container process
+# (running as a non-root user) can access them. This step is idempotent.
+fix_mount_permissions() {
+    section "Mount Permissions"
+    # Config files mounted into Spring Boot services
+    find "$PROJECT_ROOT/services"/*/config -name "*.yml" -exec chmod a+r {} + 2>/dev/null || true
+    # PostgreSQL init script (needs read + execute)
+    chmod a+rx "$PROJECT_ROOT/configs/postgres/init-db.sh" 2>/dev/null || true
+    # Frontend nginx config
+    chmod a+r "$PROJECT_ROOT/services/frontend/nginx.conf" 2>/dev/null || true
+    # SSL certs (key needs read for nginx inside container)
+    chmod a+r "$CERT_DIR/server.crt" "$CERT_DIR/server.key" 2>/dev/null || true
+    # SSL proxy configs
+    chmod -R a+rX "$PROJECT_ROOT/configs/ssl-proxy" 2>/dev/null || true
+    success "Mount permissions fixed"
+}
+
 # ─── Container startup helpers ──────────────────────────────────────────────
 
 start_replicas() {
@@ -240,23 +259,45 @@ start_ssl_proxy() {
         warning "$name already running, skipping"
         return
     fi
-    info "Starting $name ..."
-    podman run -d --name "$name" \
-        --network "$NETWORK" \
-        --label "$LABEL" \
-        -p "${HTTPS_PORT}:443" \
-        -p "${HTTP_PORT}:80" \
-        -v "$CERT_DIR/server.crt:/etc/nginx/ssl/server.crt:ro" \
-        -v "$CERT_DIR/server.key:/etc/nginx/ssl/server.key:ro" \
-        -v "$PROJECT_ROOT/configs/ssl-proxy/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro" \
-        -v "$PROJECT_ROOT/configs/ssl-proxy/conf.d:/etc/nginx/conf.d:ro" \
-        -v "$LOG_DIR:/var/log/nginx:rw" \
-        -e JWT_SECRET_PARTNER_A="dev-secret-partner-a-for-testing-only-32chars" \
-        -e JWT_SECRET_PARTNER_B="dev-secret-partner-b-for-testing-only-32chars" \
-        -e JWT_SECRET_PARTNER_C="dev-secret-partner-c-for-testing-only-32chars" \
-        -e DEBUG_PARTNERS=true \
-        "$SSL_PROXY_IMAGE"
-    success "$name started"
+
+    # nginx resolves all upstream hostnames at startup. Podman network DNS
+    # may not be ready yet, so retry a few times if the container exits
+    # immediately with "host not found in upstream".
+    local max_attempts=5
+    for attempt in $(seq 1 "$max_attempts"); do
+        info "Starting $name (attempt $attempt/$max_attempts) ..."
+        podman run -d --name "$name" \
+            --network "$NETWORK" \
+            --label "$LABEL" \
+            -p "${HTTPS_PORT}:443" \
+            -p "${HTTP_PORT}:80" \
+            -v "$CERT_DIR/server.crt:/etc/nginx/ssl/server.crt:ro" \
+            -v "$CERT_DIR/server.key:/etc/nginx/ssl/server.key:ro" \
+            -v "$PROJECT_ROOT/configs/ssl-proxy/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro" \
+            -v "$PROJECT_ROOT/configs/ssl-proxy/conf.d:/etc/nginx/conf.d:ro" \
+            -v "$LOG_DIR:/var/log/nginx:rw" \
+            -e JWT_SECRET_PARTNER_A="dev-secret-partner-a-for-testing-only-32chars" \
+            -e JWT_SECRET_PARTNER_B="dev-secret-partner-b-for-testing-only-32chars" \
+            -e JWT_SECRET_PARTNER_C="dev-secret-partner-c-for-testing-only-32chars" \
+            -e DEBUG_PARTNERS=true \
+            "$SSL_PROXY_IMAGE"
+
+        sleep 2
+        local state
+        state=$(podman inspect --format '{{.State.Status}}' "$name" 2>/dev/null || echo "unknown")
+        if [[ "$state" == "running" ]]; then
+            success "$name started"
+            return
+        fi
+
+        warning "$name exited (attempt $attempt/$max_attempts)"
+        podman logs --tail 5 "$name" 2>&1 || true
+        podman rm -f "$name" >/dev/null 2>&1 || true
+        sleep 3
+    done
+
+    error "$name failed to start after $max_attempts attempts"
+    return 1
 }
 
 # ─── Health checks ──────────────────────────────────────────────────────────
@@ -266,12 +307,28 @@ wait_for_health() {
 
     wait_http() {
         local label=$1 url=$2 elapsed=0
+        local container_name="ssl-proxy"
         info "Waiting for $label ..."
         while ! curl -sk --max-time 3 "$url" >/dev/null 2>&1; do
+            # Bail early if container doesn't exist
+            if ! podman container exists "$container_name" 2>/dev/null; then
+                error "$label container ($container_name) does not exist"
+                return 1
+            fi
+            # Bail early if container exited
+            local state
+            state=$(podman inspect --format '{{.State.Status}}' "$container_name" 2>/dev/null || echo "unknown")
+            if [[ "$state" == "exited" || "$state" == "stopped" ]]; then
+                error "$label container exited unexpectedly (state=$state)"
+                podman logs --tail 20 "$container_name" 2>&1 || true
+                return 1
+            fi
             sleep 2
             elapsed=$((elapsed + 2))
             if [[ $elapsed -ge $timeout ]]; then
                 error "$label did not become healthy within ${timeout}s"
+                info "Container state: $state"
+                podman logs --tail 20 "$container_name" 2>&1 || true
                 return 1
             fi
         done
@@ -282,10 +339,25 @@ wait_for_health() {
         local label=$1 host=$2 port=$3 elapsed=0
         info "Waiting for $label ..."
         while ! podman exec postgres pg_isready -U postgres -q 2>/dev/null; do
+            # Bail early if container doesn't exist
+            if ! podman container exists postgres 2>/dev/null; then
+                error "$label container does not exist"
+                return 1
+            fi
+            # Bail early if container exited
+            local state
+            state=$(podman inspect --format '{{.State.Status}}' postgres 2>/dev/null || echo "unknown")
+            if [[ "$state" == "exited" || "$state" == "stopped" ]]; then
+                error "$label container exited unexpectedly (state=$state)"
+                podman logs --tail 20 postgres 2>&1 || true
+                return 1
+            fi
             sleep 2
             elapsed=$((elapsed + 2))
             if [[ $elapsed -ge $timeout ]]; then
                 error "$label did not become healthy within ${timeout}s"
+                info "Container state: $state"
+                podman logs --tail 20 postgres 2>&1 || true
                 return 1
             fi
         done
@@ -307,6 +379,7 @@ main() {
     check_prereqs
     ensure_certs
     ensure_log_dir
+    fix_mount_permissions
     create_network
     build_images
 

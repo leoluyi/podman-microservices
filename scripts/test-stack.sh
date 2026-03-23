@@ -36,7 +36,7 @@ done
 cleanup() {
     section "Cleanup"
     info "Stopping test stack ..."
-    HTTPS_PORT=$HTTPS_PORT HTTP_PORT=$HTTP_PORT "$SCRIPT_DIR/local-stop.sh" 2>&1 | tail -3
+    HTTPS_PORT=$HTTPS_PORT HTTP_PORT=$HTTP_PORT "$SCRIPT_DIR/local-stop.sh" --clean 2>&1 | tail -3
     info "Cleanup complete"
 }
 trap cleanup EXIT

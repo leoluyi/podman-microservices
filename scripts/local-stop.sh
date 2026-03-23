@@ -5,7 +5,8 @@
 # Counterpart to local-start.sh. Stops services in reverse dependency order,
 # removes containers, and tears down the network.
 #
-# Usage: ./scripts/local-stop.sh
+# Usage: ./scripts/local-stop.sh [--clean]
+#   --clean   Also remove the pgdata volume (forces fresh DB on next start)
 # ============================================================================
 
 set -euo pipefail
@@ -14,6 +15,11 @@ source "$(dirname "$0")/lib.sh"
 
 NETWORK="internal-net"
 LABEL="app=microservices"
+CLEAN=false
+
+for arg in "$@"; do
+    [[ "$arg" == "--clean" ]] && CLEAN=true
+done
 
 CYAN='\033[0;36m'
 section() { echo -e "\n${CYAN}== $* ==${NC}"; }
@@ -91,6 +97,17 @@ main() {
         success "  Removed network $NETWORK"
     else
         info "Network $NETWORK does not exist, nothing to remove"
+    fi
+
+    # 8. Volumes (only with --clean)
+    if [[ "$CLEAN" == true ]]; then
+        section "Volumes"
+        if podman volume exists pgdata 2>/dev/null; then
+            podman volume rm pgdata >/dev/null 2>&1 || true
+            success "  Removed volume pgdata"
+        else
+            info "Volume pgdata does not exist, nothing to remove"
+        fi
     fi
 
     echo ""
