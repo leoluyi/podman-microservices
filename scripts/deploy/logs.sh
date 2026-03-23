@@ -1,6 +1,6 @@
 #!/bin/bash
 # 查看服務日誌（支援多副本）
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib-deploy.sh"
 
 if [ $# -eq 0 ]; then
     echo "使用方式: $0 <service-name> [instance] [lines]"

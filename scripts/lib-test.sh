@@ -32,12 +32,12 @@ test_endpoint() {
     local label=$1 expected=$2
     shift 2
     local actual
-    actual=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 10 "$@")
+    actual=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 3 "$@")
     if [[ "$actual" == "$expected" ]]; then
         pass "[$label] HTTP $actual"
     else
         fail "[$label] HTTP $actual (expected $expected)"
-        curl -sk --max-time 5 "$@" 2>/dev/null | head -3 || true
+        curl -sk --max-time 2 "$@" 2>/dev/null | head -3 || true
     fi
 }
 

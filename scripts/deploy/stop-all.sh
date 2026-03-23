@@ -5,7 +5,7 @@
 
 set -e
 
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib-deploy.sh"
 
 info "停止所有微服務..."
 

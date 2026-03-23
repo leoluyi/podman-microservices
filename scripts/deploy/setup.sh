@@ -6,7 +6,7 @@
 
 set -e
 
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib-deploy.sh"
 
 # 檢查參數
 if [ $# -eq 0 ]; then

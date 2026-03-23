@@ -5,7 +5,7 @@
 
 set -e
 
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib-deploy.sh"
 
 info "啟動所有微服務..."
 echo ""

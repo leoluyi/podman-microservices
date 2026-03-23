@@ -13,7 +13,7 @@
 
 set -e
 
-source "$(dirname "$0")/lib.sh"
+source "$(dirname "$0")/lib-deploy.sh"
 
 if [ $# -lt 2 ]; then
     echo "使用方式: $0 <service-name> <replicas>"
