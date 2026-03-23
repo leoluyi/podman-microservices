@@ -155,12 +155,13 @@ done
 | 生產 | `~/.local/share/containers/storage/secrets/` | 加密，值無法直接讀出 |
 | 開發 | `~/.config/containers/systemd/ssl-proxy.container.d/environment.conf` | 明文 INI |
 
-**優先順序**：Podman Secret 存在時，會覆蓋 `quadlet/ssl-proxy.container` 中的 `Environment=` fallback 值。
+**注入方式**：生產環境使用 Podman Secrets 注入；開發環境透過 `.container.d/environment.conf` 覆蓋設定。基礎 Quadlet 檔案不含 fallback 值，若 Secret 未建立，服務將無法驗證 JWT。
 
 ```
-# quadlet/ssl-proxy.container 的注入方式
+# quadlet/ssl-proxy.container 的注入方式（僅 Secret 聲明，無 fallback）
 Secret=jwt-secret-partner-a,type=env,target=JWT_SECRET_PARTNER_A   ← 生產：從 Podman Secret 注入
-Environment=JWT_SECRET_PARTNER_A=dev-secret-partner-a-fallback      ← 開發：Secret 不存在時的 fallback
+
+# 開發環境透過 .container.d/environment.conf 設定（非寫在基礎檔案中）
 ```
 
 ### Partner Secrets 管理（生產環境）
@@ -258,7 +259,6 @@ curl -k -H "Authorization: Bearer $TOKEN" \
 2. 更新 `quadlet/ssl-proxy.container` 添加 Secret 聲明：
    ```ini
    Secret=jwt-secret-partner-d,type=env,target=JWT_SECRET_PARTNER_D
-   Environment=JWT_SECRET_PARTNER_D=fallback-secret-32chars
    ```
 3. 創建 Podman Secret：
    ```bash

@@ -601,7 +601,7 @@ gzip_types text/plain application/json;
 ### 健康檢查
 
 ```ini
-HealthCmd=curl -f http://localhost:8080/health || exit 1
+HealthCmd=curl -sf http://localhost:8080/actuator/health || exit 1
 HealthInterval=30s
 HealthRetries=3
 ```
@@ -609,7 +609,8 @@ HealthRetries=3
 ### 自動重啟
 
 ```ini
-Restart=always
+# [Service] section — systemd 管理重啟
+Restart=on-failure
 RestartSec=10
 ```
 

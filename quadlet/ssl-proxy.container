@@ -59,7 +59,7 @@ Environment=NGINX_WORKER_CONNECTIONS=2048
 # ============================================================================
 # 健康檢查
 # ============================================================================
-HealthCmd=curl -fk https://localhost/health || exit 1
+HealthCmd=wget -qO- --no-check-certificate https://localhost/health || exit 1
 HealthInterval=30s
 HealthTimeout=10s
 HealthRetries=3

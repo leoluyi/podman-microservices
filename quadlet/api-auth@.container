@@ -14,7 +14,7 @@ Volume=/opt/app/services/api-auth/config/application-prod.yml:/app/config/applic
 Secret=db-password,type=mount,target=/run/secrets/db-password.properties
 Secret=jwt-signing-key,type=mount,target=/run/secrets/jwt-signing-key.properties
 
-HealthCmd=wget -qO- http://localhost:8080/actuator/health || exit 1
+HealthCmd=curl -sf http://localhost:8080/actuator/health || exit 1
 HealthInterval=30s
 HealthTimeout=10s
 HealthRetries=3

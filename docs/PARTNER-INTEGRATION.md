@@ -162,7 +162,6 @@ Environment=JWT_SECRET_PARTNER_D=dev-secret-partner-d-for-testing-32chars
 ```ini
 [Container]
 Secret=jwt-secret-partner-d,type=env,target=JWT_SECRET_PARTNER_D
-Environment=JWT_SECRET_PARTNER_D=fallback-secret-32chars  # Fallback
 ```
 
 ```bash
@@ -219,10 +218,8 @@ systemctl --user restart ssl-proxy
 ### 輪換 Secret
 
 ```bash
-NEW_SECRET=$(openssl rand -base64 32)
-# 更新 quadlet/ssl-proxy.container：
-# Environment=JWT_SECRET_PARTNER_A=$NEW_SECRET
-systemctl --user daemon-reload && systemctl --user restart ssl-proxy
+# 使用管理腳本輪換 Secret（推薦）
+./scripts/manage-partner-secrets.sh rotate a
 # 通知 Partner 使用新 Secret
 ```
 

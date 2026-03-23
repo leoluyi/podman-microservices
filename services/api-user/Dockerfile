@@ -1,4 +1,7 @@
-FROM maven:3.9-eclipse-temurin-21-alpine AS builder
+FROM registry.suse.com/bci/openjdk-devel:21 AS builder
+
+RUN zypper --non-interactive install maven
+
 WORKDIR /build
 COPY pom.xml ./pom.xml
 RUN mvn -N install -q -B
@@ -7,15 +10,23 @@ RUN mvn -f api-user/pom.xml dependency:go-offline -q -B
 COPY api-user/src ./api-user/src
 RUN mvn -f api-user/pom.xml package -DskipTests -q -B
 
-FROM eclipse-temurin:21-jre-alpine
+FROM registry.suse.com/bci/openjdk:21
+
 WORKDIR /app
-RUN addgroup -S app && adduser -S app -G app
+
 COPY --from=builder /build/api-user/target/*.jar app.jar
-RUN mkdir -p /app/config && chown -R app:app /app
-USER app
+
+RUN useradd -r -u 1001 -g root appuser && \
+    mkdir -p /app/config && \
+    chown -R appuser:root /app
+
+USER appuser
+
 EXPOSE 8080
+
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD wget -qO- http://localhost:8080/actuator/health || exit 1
-ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", \
-    "-jar", "app.jar", \
-    "--spring.config.additional-location=optional:file:/app/config/"]
+    CMD curl -sf http://localhost:8080/actuator/health || exit 1
+
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseZGC -XX:+ZGenerational"
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar --spring.config.additional-location=optional:file:/app/config/"]
