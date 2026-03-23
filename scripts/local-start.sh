@@ -108,41 +108,56 @@ ensure_log_dir() {
 # ─── Image builds ───────────────────────────────────────────────────────────
 build_images() {
     section "Building Images"
+    local pids=()
 
-    info "Building api-auth ..."
+    info "Building all images in parallel ..."
+
     podman build -t "$API_AUTH_IMAGE" \
         -f "$PROJECT_ROOT/services/api-auth/Dockerfile" \
-        "$PROJECT_ROOT/services" --quiet
+        "$PROJECT_ROOT/services" --quiet &
+    pids+=($!)
 
-    info "Building api-user ..."
     podman build -t "$API_USER_IMAGE" \
         -f "$PROJECT_ROOT/services/api-user/Dockerfile" \
-        "$PROJECT_ROOT/services" --quiet
+        "$PROJECT_ROOT/services" --quiet &
+    pids+=($!)
 
-    info "Building api-order ..."
     podman build -t "$API_ORDER_IMAGE" \
         -f "$PROJECT_ROOT/services/api-order/Dockerfile" \
-        "$PROJECT_ROOT/services" --quiet
+        "$PROJECT_ROOT/services" --quiet &
+    pids+=($!)
 
-    info "Building api-product ..."
     podman build -t "$API_PRODUCT_IMAGE" \
         -f "$PROJECT_ROOT/services/api-product/Dockerfile" \
-        "$PROJECT_ROOT/services" --quiet
+        "$PROJECT_ROOT/services" --quiet &
+    pids+=($!)
 
-    info "Building bff ..."
     podman build -t "$BFF_IMAGE" \
         -f "$PROJECT_ROOT/services/bff/Dockerfile" \
-        "$PROJECT_ROOT/services" --quiet
+        "$PROJECT_ROOT/services" --quiet &
+    pids+=($!)
 
-    info "Building frontend ..."
     podman build -t "$FRONTEND_IMAGE" \
         -f "$PROJECT_ROOT/services/frontend/Dockerfile" \
-        "$PROJECT_ROOT" --quiet
+        "$PROJECT_ROOT" --quiet &
+    pids+=($!)
 
-    info "Building ssl-proxy ..."
     podman build -t "$SSL_PROXY_IMAGE" \
         -f "$PROJECT_ROOT/services/ssl-proxy/Dockerfile" \
-        "$PROJECT_ROOT" --quiet
+        "$PROJECT_ROOT" --quiet &
+    pids+=($!)
+
+    local failed=0
+    for pid in "${pids[@]}"; do
+        if ! wait "$pid"; then
+            failed=$((failed + 1))
+        fi
+    done
+
+    if [[ $failed -gt 0 ]]; then
+        error "$failed image build(s) failed"
+        return 1
+    fi
 
     success "All images built"
 }
