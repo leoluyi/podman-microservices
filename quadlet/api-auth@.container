@@ -1,17 +1,18 @@
 [Unit]
-Description=Order API Service - Instance %i
+Description=Auth API Service - Instance %i
 After=internal-net.service postgres.service
 Requires=internal-net.service
 
 [Container]
-Image=localhost/api-order:latest
-ContainerName=api-order-%i
-Network=internal-net:alias=api-order
+Image=localhost/api-auth:latest
+ContainerName=api-auth-%i
+Network=internal-net:alias=api-auth
 
 Environment=SPRING_PROFILES_ACTIVE=prod
 
-Volume=/opt/app/services/api-order/config/application-prod.yml:/app/config/application-prod.yml:ro
+Volume=/opt/app/services/api-auth/config/application-prod.yml:/app/config/application-prod.yml:ro
 Secret=db-password,type=mount,target=/run/secrets/db-password.properties
+Secret=jwt-signing-key,type=mount,target=/run/secrets/jwt-signing-key.properties
 
 HealthCmd=wget -qO- http://localhost:8080/actuator/health || exit 1
 HealthInterval=30s
@@ -29,7 +30,7 @@ CPUQuota=50%
 LogDriver=journald
 
 Label=app=microservices
-Label=service=api-order
+Label=service=api-auth
 Label=instance=%i
 Label=tier=backend
 

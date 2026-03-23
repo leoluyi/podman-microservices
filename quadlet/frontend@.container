@@ -8,7 +8,7 @@ Requires=internal-net.service
 # ============================================================================
 # 鏡像配置
 # ============================================================================
-Image=docker.io/library/nginx:alpine
+Image=localhost/frontend:latest
 
 ContainerName=frontend-%i
 
@@ -26,7 +26,7 @@ Environment=NGINX_PORT=80
 # ============================================================================
 # Volume 掛載
 # ============================================================================
-Volume=/opt/app/configs/frontend/nginx.conf:/etc/nginx/nginx.conf:ro
+Volume=/opt/app/services/frontend/nginx.conf:/etc/nginx/nginx.conf:ro
 
 # ============================================================================
 # 健康檢查

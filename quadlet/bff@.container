@@ -1,65 +1,33 @@
 [Unit]
-Description=BFF (Backend For Frontend) Gateway - Instance %i
-Documentation=https://github.com/your-org/bff-service
+Description=BFF Gateway (Spring Cloud Gateway) - Instance %i
 After=internal-net.service
 Requires=internal-net.service
 
 [Container]
-# ============================================================================
-# 鏡像配置
-# ============================================================================
 Image=localhost/bff:latest
-
 ContainerName=bff-%i
-
-# ============================================================================
-# 網路配置
-# ============================================================================
 Network=internal-net:alias=bff
 
-# ============================================================================
-# 環境變數
-# ============================================================================
-Environment=SERVICE_NAME=bff
-Environment=SERVICE_INSTANCE=%i
-Environment=SERVICE_PORT=8080
-Environment=ENVIRONMENT=production
+Environment=SPRING_PROFILES_ACTIVE=prod
 
-# Backend API 端點（透過 DNS 別名，自動 round-robin 到各副本）
-Environment=API_USER_URL=http://api-user:8080
-Environment=API_ORDER_URL=http://api-order:8080
-Environment=API_PRODUCT_URL=http://api-product:8080
+Volume=/opt/app/services/bff/config/application-prod.yml:/app/config/application-prod.yml:ro
+Secret=jwt-signing-key,type=mount,target=/run/secrets/jwt-signing-key.properties
 
-# ============================================================================
-# 健康檢查
-# ============================================================================
-HealthCmd=curl -f http://localhost:8080/health || exit 1
+HealthCmd=wget -qO- http://localhost:8080/actuator/health || exit 1
 HealthInterval=30s
 HealthTimeout=10s
 HealthRetries=3
-HealthStartPeriod=30s
+HealthStartPeriod=60s
 
-# ============================================================================
-# 重啟策略
-# ============================================================================
 Restart=always
 RestartSec=10
 
-# ============================================================================
-# 資源限制
-# ============================================================================
-Memory=512M
-MemorySwap=512M
+Memory=768M
+MemorySwap=768M
 CPUQuota=50%
 
-# ============================================================================
-# 日誌配置
-# ============================================================================
 LogDriver=journald
 
-# ============================================================================
-# 標籤
-# ============================================================================
 Label=app=microservices
 Label=service=bff
 Label=instance=%i

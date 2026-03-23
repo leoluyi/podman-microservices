@@ -1,0 +1,45 @@
+[Unit]
+Description=PostgreSQL 16 Database
+After=internal-net.service
+Requires=internal-net.service
+
+[Container]
+Image=docker.io/library/postgres:16-alpine
+ContainerName=postgres
+Network=internal-net:alias=postgres
+
+Environment=POSTGRES_PASSWORD_FILE=/run/secrets/postgres-password
+
+Secret=postgres-password,type=mount,target=/run/secrets/postgres-password
+Secret=db-app-password,type=env,target=APP_USER_PASSWORD
+
+Volume=/opt/app/configs/postgres/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+Volume=pgdata:/var/lib/postgresql/data
+
+HealthCmd=pg_isready -U postgres
+HealthInterval=30s
+HealthTimeout=10s
+HealthRetries=3
+HealthStartPeriod=30s
+
+Restart=always
+RestartSec=10
+
+Memory=512M
+MemorySwap=512M
+CPUQuota=50%
+
+LogDriver=journald
+
+Label=app=microservices
+Label=service=postgres
+Label=tier=database
+
+[Service]
+TimeoutStartSec=120
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target default.target

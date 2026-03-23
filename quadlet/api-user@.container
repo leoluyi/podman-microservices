@@ -1,73 +1,37 @@
 [Unit]
 Description=User API Service - Instance %i
-Documentation=https://github.com/your-org/api-user
-After=internal-net.service
+After=internal-net.service postgres.service
 Requires=internal-net.service
 
 [Container]
-# ============================================================================
-# 鏡像配置
-# ============================================================================
 Image=localhost/api-user:latest
-
 ContainerName=api-user-%i
-
-# ============================================================================
-# 網路配置
-# ============================================================================
-# 連接內部隔離網路，並設定 DNS 別名讓所有副本共用 "api-user" 名稱
-# 其他服務（如 BFF）可直接透過 http://api-user:8080 訪問，
-# Podman DNS 會自動 round-robin 到各副本
 Network=internal-net:alias=api-user
 
-# 多副本模式下不映射 debug port（避免衝突）
-# 如需 debug 單一 instance，透過 podman exec 進入
+Environment=SPRING_PROFILES_ACTIVE=prod
 
-# ============================================================================
-# 環境變數
-# ============================================================================
-Environment=SERVICE_NAME=api-user
-Environment=SERVICE_INSTANCE=%i
-Environment=SERVICE_PORT=8080
-Environment=ENVIRONMENT=production
+Volume=/opt/app/services/api-user/config/application-prod.yml:/app/config/application-prod.yml:ro
+Secret=db-password,type=mount,target=/run/secrets/db-password.properties
 
-# 資料庫連線由 environment.conf 提供（dev/prod 分開管理）
-
-# ============================================================================
-# 健康檢查
-# ============================================================================
-HealthCmd=curl -f http://localhost:8080/health || exit 1
+HealthCmd=wget -qO- http://localhost:8080/actuator/health || exit 1
 HealthInterval=30s
 HealthTimeout=10s
 HealthRetries=3
-HealthStartPeriod=30s
+HealthStartPeriod=60s
 
-# ============================================================================
-# 重啟策略
-# ============================================================================
 Restart=always
 RestartSec=10
 
-# ============================================================================
-# 資源限制
-# ============================================================================
-Memory=512M
-MemorySwap=512M
+Memory=768M
+MemorySwap=768M
 CPUQuota=50%
 
-# ============================================================================
-# 日誌配置
-# ============================================================================
 LogDriver=journald
 
-# ============================================================================
-# 標籤
-# ============================================================================
 Label=app=microservices
 Label=service=api-user
 Label=instance=%i
 Label=tier=backend
-Label=public-access=false
 
 [Service]
 TimeoutStartSec=120
