@@ -1,6 +1,5 @@
 [Unit]
 Description=SSL Termination Proxy with Unified Token Verification
-Documentation=https://github.com/your-org/microservices
 After=internal-net.service
 Requires=internal-net.service
 # 各服務副本由 start-all.sh 按順序啟動，不在此宣告個別 instance 依賴
@@ -47,11 +46,8 @@ Secret=jwt-secret-partner-a,type=env,target=JWT_SECRET_PARTNER_A
 Secret=jwt-secret-partner-b,type=env,target=JWT_SECRET_PARTNER_B
 Secret=jwt-secret-partner-c,type=env,target=JWT_SECRET_PARTNER_C
 
-# 開發環境：Fallback 環境變數（Secret 不存在時使用）
-# 這些會被 .container.d/environment.conf 覆蓋
-Environment=JWT_SECRET_PARTNER_A=dev-secret-partner-a-fallback-32chars
-Environment=JWT_SECRET_PARTNER_B=dev-secret-partner-b-fallback-32chars
-Environment=JWT_SECRET_PARTNER_C=dev-secret-partner-c-fallback-32chars
+# 開發環境：透過 .container.d/environment.conf 設定 JWT Secrets
+# 生產環境：必須建立 Podman Secrets，否則服務將無法驗證 JWT
 
 # Debug 模式（開發環境可透過 .container.d 覆蓋）
 Environment=DEBUG_PARTNERS=false
@@ -72,9 +68,6 @@ HealthStartPeriod=15s
 # ============================================================================
 # 重啟策略
 # ============================================================================
-Restart=always
-RestartSec=10
-
 # ============================================================================
 # 資源限制
 # ============================================================================

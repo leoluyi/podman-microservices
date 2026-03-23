@@ -6,7 +6,7 @@
 
 [Container]
 # Debug 端口（開發環境，只綁定 localhost）
-Environment=DEBUG_PORT_8103=127.0.0.1:8103:8080
+PublishPort=127.0.0.1:8103:8080
 
 # 資料庫連線（必填）
 Environment=DB_HOST=your-db-host.example.com

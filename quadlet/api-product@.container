@@ -19,9 +19,6 @@ HealthTimeout=10s
 HealthRetries=3
 HealthStartPeriod=60s
 
-Restart=always
-RestartSec=10
-
 Memory=768M
 MemorySwap=768M
 CPUQuota=50%
@@ -34,7 +31,7 @@ Label=instance=%i
 Label=tier=backend
 
 [Service]
-TimeoutStartSec=120
+TimeoutStartSec=180
 TimeoutStopSec=30
 Restart=on-failure
 RestartSec=10

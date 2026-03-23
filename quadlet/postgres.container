@@ -22,9 +22,6 @@ HealthTimeout=10s
 HealthRetries=3
 HealthStartPeriod=30s
 
-Restart=always
-RestartSec=10
-
 Memory=512M
 MemorySwap=512M
 CPUQuota=50%
