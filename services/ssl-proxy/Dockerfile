@@ -16,8 +16,4 @@ RUN chmod 644 /usr/local/openresty/site/lualib/partner-auth.lua \
 
 EXPOSE 80 443
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD curl -fk https://localhost/health || exit 1
-
 CMD ["/usr/local/openresty/bin/openresty", "-g", "daemon off;"]

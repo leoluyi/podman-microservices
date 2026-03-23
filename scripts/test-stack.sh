@@ -51,7 +51,7 @@ fi
 
 "$SCRIPT_DIR/local-start.sh" ${local_start_args[@]+"${local_start_args[@]}"} 2>&1 | grep -E "(SUCCESS|ERROR|Building|started|is up|Skipping)"
 
-# Wait for all Spring Boot services to be healthy via Podman healthcheck
+# Wait for all Spring Boot services to be ready
 wait_for_services 120 api-auth-1 api-order-1 api-user-1 api-product-1 bff-1
 
 # ─── T1: Infrastructure ─────────────────────────────────────────────────────

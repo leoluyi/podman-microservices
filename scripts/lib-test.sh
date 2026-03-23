@@ -60,8 +60,6 @@ get_auth_token() {
 
 # wait_for_services <timeout_seconds> <service_names...>
 # Polls container logs for Spring Boot "Started" message every 2s.
-# (Podman on macOS does not propagate Dockerfile HEALTHCHECK to containers
-#  started via `podman run`, so we cannot use `podman inspect` health status.)
 wait_for_services() {
     local timeout=$1; shift
     local services=("$@")
