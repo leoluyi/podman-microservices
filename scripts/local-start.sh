@@ -307,7 +307,7 @@ start_ssl_proxy() {
             -e DEBUG_PARTNERS=true \
             "$SSL_PROXY_IMAGE"
 
-        sleep 2
+        sleep 1
         local state
         state=$(podman inspect --format '{{.State.Status}}' "$name" 2>/dev/null || echo "unknown")
         if [[ "$state" == "running" ]]; then
@@ -318,7 +318,7 @@ start_ssl_proxy() {
         warning "$name exited (attempt $attempt/$max_attempts)"
         podman logs --tail 5 "$name" 2>&1 || true
         podman rm -f "$name" >/dev/null 2>&1 || true
-        sleep 3
+        sleep 1
     done
 
     error "$name failed to start after $max_attempts attempts"
