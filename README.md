@@ -53,7 +53,7 @@
 
 | 服務 | 容器內部 | 主機端口 | 說明 |
 |------|---------|---------|------|
-| **SSL Proxy** | 80, 443 | 80, 443 | 統一 HTTPS 入口 |
+| **SSL Proxy** | 80, 443 | 8080, 8443 | 統一 HTTPS 入口（rootless 高位 port） |
 | **Cockpit** | 9090 | 9090 | Web 管理介面（Host 服務） |
 | Frontend | 80 | - (內部) | 透過 SSL Proxy |
 | BFF | 8080 | - (內部) | 透過 SSL Proxy |
@@ -65,14 +65,15 @@
 
 | 服務 | 主機端口 | 綁定 | 用途 |
 |------|---------|------|------|
-| SSL Proxy | 80, 443 | 所有介面 | 對外服務 |
+| SSL Proxy | 8080, 8443 | 所有介面 | 對外服務 |
+| Frontend | 8100 | 127.0.0.1 | localhost Debug |
 | API-User | 8101 | 127.0.0.1 | localhost Debug |
 | API-Order | 8102 | 127.0.0.1 | localhost Debug |
 | API-Product | 8103 | 127.0.0.1 | localhost Debug |
 
 **Debug 端口特性：**
 - 只綁定 `127.0.0.1`，外部無法訪問
-- 編號規則：81 + 服務編號（01, 02, 03）
+- 編號規則：81 + 服務編號（00=frontend, 01-03=backend APIs）
 - 生產環境自動禁用
 
 **完整端口設計說明：** 詳見 `docs/ARCHITECTURE.md` 的「端口規劃」章節
@@ -206,21 +207,21 @@ sudo setenforce 0  # 臨時設為 Permissive
 
 ```bash
 # 前端（不需驗證）
-curl -k https://localhost/
+curl -k https://localhost:8443/
 
 # Web/App API（由 BFF 處理 Session 認證）
 # 先登入取得 Session
-curl -k -X POST https://localhost/api/login \
+curl -k -X POST https://localhost:8443/api/login \
      -d '{"username":"user","password":"pass"}' \
      -c cookies.txt
 
 # 使用 Session 訪問 API
-curl -k https://localhost/api/orders -b cookies.txt
+curl -k https://localhost:8443/api/orders -b cookies.txt
 
 # Partner API（SSL Proxy 驗證 JWT Token）
 PARTNER_TOKEN=$(./scripts/generate-jwt.sh partner-company-a)
 curl -k -H "Authorization: Bearer $PARTNER_TOKEN" \
-     https://localhost/partner/api/order/
+     https://localhost:8443/partner/api/order/
 ```
 
 ## 目錄結構
@@ -256,12 +257,15 @@ podman-microservices/
 │   └── frontend/                      # Frontend 配置
 │       └── nginx.conf                 # Frontend Nginx 配置
 │
-├── 📁 dockerfiles/                    # Dockerfile（SUSE BCI）
-│   ├── api-user/Dockerfile            # User API (OpenJDK 17)
-│   ├── api-order/Dockerfile           # Order API (OpenJDK 17)
-│   ├── api-product/Dockerfile         # Product API (OpenJDK 17)
-│   ├── bff/Dockerfile                 # BFF Gateway (Node.js 20)
-│   └── frontend/Dockerfile            # Frontend (Nginx 1.21)
+├── 📁 services/                       # 原始碼 + Dockerfile
+│   ├── pom.xml                        # Maven 父 POM（共用依賴版本）
+│   ├── api-auth/Dockerfile            # Auth API (SUSE BCI OpenJDK 21)
+│   ├── api-user/Dockerfile            # User API (SUSE BCI OpenJDK 21)
+│   ├── api-order/Dockerfile           # Order API (SUSE BCI OpenJDK 21)
+│   ├── api-product/Dockerfile         # Product API (SUSE BCI OpenJDK 21)
+│   ├── bff/Dockerfile                 # BFF Gateway (SUSE BCI OpenJDK 21)
+│   ├── frontend/Dockerfile            # Frontend (SUSE Nginx 1.21)
+│   └── ssl-proxy/Dockerfile           # SSL Proxy (OpenResty Alpine)
 │
 ├── 📁 scripts/                        # 管理腳本
 │   ├── setup.sh                       # 初始化部署（dev/prod）
@@ -355,12 +359,12 @@ Client → SSL Proxy (不驗證) → BFF (Session 驗證) → Backend APIs
 **範例：**
 ```bash
 # 先登入取得 Session
-curl -k -X POST https://localhost/api/login \
+curl -k -X POST https://localhost:8443/api/login \
      -d '{"username":"user","password":"pass"}' \
      -c cookies.txt
 
 # 使用 Session 訪問 API
-curl -k https://localhost/api/orders -b cookies.txt
+curl -k https://localhost:8443/api/orders -b cookies.txt
 ```
 
 ### 2. Partner API → JWT Token 驗證（SSL Proxy 層）
@@ -384,7 +388,7 @@ TOKEN=$(./scripts/generate-jwt.sh partner-company-a)
 
 # 使用 Token 訪問 Partner API
 curl -k -H "Authorization: Bearer $TOKEN" \
-     https://localhost/partner/api/order/
+     https://localhost:8443/partner/api/order/
 ```
 
 - **架構說明：** 詳見 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
@@ -392,24 +396,22 @@ curl -k -H "Authorization: Bearer $TOKEN" \
 
 ## 建置容器鏡像
 
-專案包含使用 SUSE BCI 的 Dockerfile 範例：
+專案使用 SUSE BCI 基底映像。Java 服務採用 multi-module Maven，需從 `services/` 目錄建置：
 
 ```bash
-# 建置所有後端與前端服務
-for service in api-user api-order api-product bff frontend; do
-    cd dockerfiles/$service
-    podman build -t localhost/$service:latest .
-    cd ../..
+# 建置 Java 後端服務（build context = services/）
+for service in api-auth api-user api-order api-product bff; do
+    podman build -f services/$service/Dockerfile \
+        -t localhost/$service:latest services/
 done
-```
 
-> **注意**：`ssl-proxy` 直接使用 upstream OpenResty image（`docker.io/openresty/openresty:alpine`），**不需要自訂 build**。Quadlet 啟動時會自動 pull；離線環境請參考下方「映像管理」章節預先匯入。
+# 建置前端（build context = 專案根目錄）
+podman build -f services/frontend/Dockerfile \
+    -t localhost/frontend:latest .
 
-**BFF 佔位測試**：若暫時以 `nginx:alpine` 作為 BFF 佔位 image，需掛載 `configs/bff/nginx.conf` 以確保監聽正確的 8080 port：
-
-```bash
-# quadlet/bff.container 加入：
-# Volume=/opt/app/configs/bff/nginx.conf:/etc/nginx/nginx.conf:ro
+# 建置 SSL Proxy（安裝 lua-resty-jwt，build context = 專案根目錄）
+podman build -f services/ssl-proxy/Dockerfile \
+    -t localhost/ssl-proxy:latest .
 ```
 
 ## 常用操作
@@ -450,19 +452,20 @@ done
 
 **開發模式：**
 ```bash
-# 直接測試 Backend API
-curl http://localhost:8101/health  # API-User
-curl http://localhost:8102/health  # API-Order
-curl http://localhost:8103/health  # API-Product
+# 直接測試服務（Debug 端口）
+curl http://localhost:8100/health           # Frontend
+curl http://localhost:8101/actuator/health  # API-User
+curl http://localhost:8102/actuator/health  # API-Order
+curl http://localhost:8103/actuator/health  # API-Product
 ```
 
 **生產模式：**
 ```bash
 # 透過 SSL Proxy
-curl -k https://localhost/api/users
+curl -k https://localhost:8443/api/users
 
 # 或進入特定副本容器
-podman exec -it api-order-1 curl http://localhost:8080/health
+podman exec -it api-order-1 curl -sf http://localhost:8080/actuator/health
 ```
 
 ## 安全建議
@@ -550,7 +553,7 @@ echo $TOKEN | cut -d. -f2 | base64 -d 2>/dev/null  # 解碼查看 payload
 
 ### 新增 Backend API
 
-1. 複製 Dockerfile：`dockerfiles/api-user` → `dockerfiles/api-newservice`
+1. 複製 Dockerfile：`services/api-user` → `services/api-newservice`
 2. 複製 Quadlet 配置：`quadlet/api-user@.container` → `quadlet/api-newservice@.container`
 3. 修改配置中的服務名稱（ContainerName、Label 等）
 4. 在 `configs/ha.conf` 加入 `API_NEWSERVICE_REPLICAS=2`
@@ -679,23 +682,25 @@ podman info | grep -E 'rootless|networkBackend|graphDriverName'
 
 | Image | 用途 |
 |-------|------|
-| `docker.io/openresty/openresty:alpine` | ssl-proxy（upstream，無需 build） |
-| `docker.io/library/nginx:alpine` | frontend、bff 佔位 |
+| `registry.suse.com/bci/openjdk-devel:21` | Java 服務 build stage |
+| `registry.suse.com/bci/openjdk:21` | Java 服務 runtime（api-auth/user/order/product, bff） |
+| `registry.suse.com/suse/nginx:1.21` | Frontend runtime |
+| `docker.io/openresty/openresty:alpine` | ssl-proxy base image |
+| `node:22-alpine` | Frontend build stage |
+| `localhost/api-auth:latest` | API-Auth 服務 |
 | `localhost/api-user:latest` | API-User 服務 |
 | `localhost/api-order:latest` | API-Order 服務 |
 | `localhost/api-product:latest` | API-Product 服務 |
+| `localhost/bff:latest` | BFF Gateway 服務 |
+| `localhost/frontend:latest` | Frontend 服務 |
+| `localhost/ssl-proxy:latest` | SSL Proxy 服務 |
 
 ```bash
-# 連網機：pull 並匯出所有 images
+# 連網機：先建置所有 images，再匯出
 mkdir -p /tmp/podman-images
 
-podman pull docker.io/openresty/openresty:alpine
-podman save docker.io/openresty/openresty:alpine -o /tmp/podman-images/openresty-alpine.tar
-
-podman pull docker.io/library/nginx:alpine
-podman save docker.io/library/nginx:alpine -o /tmp/podman-images/nginx-alpine.tar
-
-for svc in api-user api-order api-product; do
+# 匯出所有已建置的 images
+for svc in api-auth api-user api-order api-product bff frontend ssl-proxy; do
     podman save localhost/${svc}:latest -o /tmp/podman-images/${svc}-latest.tar
 done
 

@@ -20,22 +20,18 @@ cd podman-microservices
 ### 2. 建置容器鏡像
 
 ```bash
-# 建置後端 API 服務與前端
-for service in api-user api-order api-product bff frontend; do
-    cd dockerfiles/$service
-    podman build -t localhost/$service:latest .
-    cd ../..
+# 建置 Java 後端服務（build context = services/）
+for service in api-auth api-user api-order api-product bff; do
+    podman build -f services/$service/Dockerfile \
+        -t localhost/$service:latest services/
 done
-```
 
-> **注意**：`ssl-proxy` 使用 upstream OpenResty image，由 Quadlet 在啟動時直接 pull，**不需要自訂 build**。
-> 離線環境請事先執行 `podman pull docker.io/openresty/openresty:alpine` 並搬移至目標機器：
-> ```bash
-> # 連網機：匯出
-> podman save docker.io/openresty/openresty:alpine -o openresty-alpine.tar
-> # 離線機：匯入
-> podman load -i openresty-alpine.tar
-> ```
+# 建置前端與 SSL Proxy（build context = 專案根目錄）
+podman build -f services/frontend/Dockerfile \
+    -t localhost/frontend:latest .
+podman build -f services/ssl-proxy/Dockerfile \
+    -t localhost/ssl-proxy:latest .
+```
 
 ### 3. 初始化環境（開發模式）
 
@@ -122,8 +118,8 @@ chmod 600 /opt/app/certs/server.key
 ### 4. 防火牆設定
 
 ```bash
-sudo firewall-cmd --permanent --add-port=443/tcp
-sudo firewall-cmd --permanent --add-port=80/tcp
+sudo firewall-cmd --permanent --add-port=8443/tcp
+sudo firewall-cmd --permanent --add-port=8080/tcp
 sudo firewall-cmd --reload
 ```
 
@@ -212,7 +208,7 @@ done
 TOKEN=$(./scripts/generate-jwt.sh partner-company-a)
 
 curl -k -H "Authorization: Bearer $TOKEN" \
-     https://localhost/partner/api/order/
+     https://localhost:8443/partner/api/order/
 ```
 
 **生產環境**：
@@ -308,9 +304,9 @@ sudo firewall-cmd --reload
 ### 更新服務
 
 ```bash
-# 重新建置鏡像
-cd dockerfiles/api-user
-podman build -t localhost/api-user:latest .
+# 重新建置鏡像（從專案根目錄執行）
+podman build -f services/api-user/Dockerfile \
+    -t localhost/api-user:latest services/
 
 # Rolling restart（逐一重啟副本，零中斷）
 ./scripts/restart-service.sh api-user
@@ -369,7 +365,7 @@ sudo logrotate -f /etc/logrotate.d/ssl-proxy
 
 # 確認 log 仍正常寫入
 ls -lh /opt/app/logs/ssl-proxy/
-curl -k https://localhost/health
+curl -k https://localhost:8443/health
 ```
 
 ### 備份

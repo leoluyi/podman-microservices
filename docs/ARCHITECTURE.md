@@ -11,7 +11,7 @@
                            ↓
                     ┌──────────────┐
                     │   Firewall   │
-                    │  (443, 80)   │
+                    │ (8443, 8080) │
                     └──────┬───────┘
                            ↓
               ╔═══════════════════════════╗
@@ -105,7 +105,7 @@ Backend APIs
 
 | 服務 | 容器內部 | 主機端口 | 訪問方式 | 說明 |
 |------|---------|---------|---------|------|
-| **SSL Proxy** | 80, 443 | 80, 443 | 對外開放 | 統一 HTTPS 入口 |
+| **SSL Proxy** | 80, 443 | 8080, 8443 | 對外開放 | 統一 HTTPS 入口（rootless 高位 port） |
 | **Cockpit** | 9090 | 9090 | 管理網段 | Web 管理介面（Host 服務） |
 | **Frontend** | 80 | - | 內部 | 透過 SSL Proxy 訪問 |
 | **BFF** | 8080 | - | 內部 | 透過 SSL Proxy 訪問 |
@@ -117,21 +117,22 @@ Backend APIs
 
 | 服務 | 主機端口 | 綁定 | 用途 |
 |------|---------|------|------|
-| SSL Proxy | 80, 443 | 所有介面 | 對外服務 |
+| SSL Proxy | 8080, 8443 | 所有介面 | 對外服務 |
+| Frontend | 8100 | 127.0.0.1 | localhost Debug |
 | API-User | 8101 | 127.0.0.1 | localhost Debug |
 | API-Order | 8102 | 127.0.0.1 | localhost Debug |
 | API-Product | 8103 | 127.0.0.1 | localhost Debug |
 
 **Debug 端口特性：**
 - 只綁定 `127.0.0.1`，外部無法訪問
-- 編號規則：81 + 服務編號（01, 02, 03）
+- 編號規則：81 + 服務編號（00=frontend, 01-03=backend APIs）
 - 生產環境自動禁用
 
 ### 端口分配邏輯
 
 ```
-對外端口：
-  443, 80   → SSL Proxy（統一入口）
+對外端口（rootless 高位 port）：
+  8443, 8080 → SSL Proxy（統一入口）
 
 內部端口（統一）：
   8080      → 所有 Backend APIs（容器內部）
@@ -139,6 +140,7 @@ Backend APIs
   80        → Frontend（容器內部）
 
 Debug 端口（開發模式）：
+  8100      → Frontend（127.0.0.1 綁定）
   8101-8103 → Backend APIs（127.0.0.1 綁定）
 
 管理端口：
@@ -173,7 +175,7 @@ PublishPort=127.0.0.1:8101:8080
 
 ### 防火牆設定
 
-生產環境只需開放 80 和 443。設定步驟見 [DEPLOYMENT.md § 防火牆設定](./DEPLOYMENT.md)。
+生產環境只需開放 8080 和 8443（rootless Podman 使用高位 port）。設定步驟見 [DEPLOYMENT.md § 防火牆設定](./DEPLOYMENT.md)。
 
 **不需要開放的端口：**
 - 8080（BFF，內部訪問）
@@ -447,7 +449,7 @@ Internal Network (10.89.0.0/24)
 
 | 來源 | 目標 | 端口 | 是否允許 |
 |------|------|------|---------|
-| 外部 | SSL Proxy | 443/80 | ✅ 允許 |
+| 外部 | SSL Proxy | 8443/8080 | ✅ 允許 |
 | 外部 | Frontend | 80 | ❌ 拒絕 |
 | 外部 | BFF | 8080 | ❌ 拒絕 |
 | 外部 | Backend APIs | 8080 | ❌ 拒絕 |
@@ -456,6 +458,7 @@ Internal Network (10.89.0.0/24)
 | SSL Proxy | Backend APIs | 8080 | ✅ 允許（Partner）|
 | BFF | Backend APIs | 8080 | ✅ 允許 |
 | 主機（生產）| Backend APIs | - | ❌ 拒絕 |
+| 主機（開發）| Frontend | 8100 | ✅ 允許 |
 | 主機（開發）| Backend APIs | 8101-8103 | ✅ 允許 |
 
 ---
