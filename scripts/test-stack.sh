@@ -44,12 +44,12 @@ trap cleanup EXIT
 # ─── Start Stack ─────────────────────────────────────────────────────────────
 section "Starting Test Stack (ports $HTTPS_PORT/$HTTP_PORT)"
 
+local_start_args=()
 if [[ "$SKIP_BUILD" == true ]]; then
-    info "Skipping image builds (--skip-build)"
-    # Tag existing images so local-start.sh finds them
+    local_start_args+=(--skip-build)
 fi
 
-"$SCRIPT_DIR/local-start.sh" 2>&1 | grep -E "(SUCCESS|ERROR|Building|started|is up)"
+"$SCRIPT_DIR/local-start.sh" "${local_start_args[@]}" 2>&1 | grep -E "(SUCCESS|ERROR|Building|started|is up|Skipping)"
 
 # Wait for all Spring Boot services to be healthy via Podman healthcheck
 wait_for_services 120 api-auth-1 api-order-1 api-user-1 api-product-1 bff-1
