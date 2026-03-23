@@ -5,7 +5,7 @@
 # For local development on machines without systemd (e.g., macOS).
 # Services stay running after the script exits -- use local-stop.sh to tear down.
 #
-# Usage: ./scripts/local-start.sh
+# Usage: ./scripts/local-start.sh [--skip-build]
 # ============================================================================
 
 set -euo pipefail
@@ -249,9 +249,19 @@ start_auth() {
 
 start_api_services() {
     section "API Services"
-    start_spring_service api-user    "$API_USER_IMAGE"
-    start_spring_service api-order   "$API_ORDER_IMAGE"
-    start_spring_service api-product "$API_PRODUCT_IMAGE"
+    local pids=()
+    start_spring_service api-user    "$API_USER_IMAGE" & pids+=($!)
+    start_spring_service api-order   "$API_ORDER_IMAGE" & pids+=($!)
+    start_spring_service api-product "$API_PRODUCT_IMAGE" & pids+=($!)
+
+    local failed=0
+    for pid in "${pids[@]}"; do
+        if ! wait "$pid"; then failed=$((failed + 1)); fi
+    done
+    if [[ $failed -gt 0 ]]; then
+        error "$failed API service(s) failed to start"
+        return 1
+    fi
 }
 
 start_bff() {
@@ -316,6 +326,31 @@ start_ssl_proxy() {
 }
 
 # ─── Health checks ──────────────────────────────────────────────────────────
+wait_for_postgres() {
+    local timeout=60 elapsed=0
+    info "Waiting for PostgreSQL ..."
+    while ! podman exec postgres pg_isready -U postgres -q 2>/dev/null; do
+        if ! podman container exists postgres 2>/dev/null; then
+            error "PostgreSQL container does not exist"
+            return 1
+        fi
+        local state
+        state=$(podman inspect --format '{{.State.Status}}' postgres 2>/dev/null || echo "unknown")
+        if [[ "$state" == "exited" || "$state" == "stopped" ]]; then
+            error "PostgreSQL exited unexpectedly (state=$state)"
+            podman logs --tail 20 postgres 2>&1 || true
+            return 1
+        fi
+        sleep 2
+        elapsed=$((elapsed + 2))
+        if [[ $elapsed -ge $timeout ]]; then
+            error "PostgreSQL did not become ready within ${timeout}s"
+            return 1
+        fi
+    done
+    success "PostgreSQL is ready"
+}
+
 wait_for_health() {
     section "Health Checks"
     local timeout=120
@@ -325,12 +360,10 @@ wait_for_health() {
         local container_name="ssl-proxy"
         info "Waiting for $label ..."
         while ! curl -sk --max-time 3 "$url" >/dev/null 2>&1; do
-            # Bail early if container doesn't exist
             if ! podman container exists "$container_name" 2>/dev/null; then
                 error "$label container ($container_name) does not exist"
                 return 1
             fi
-            # Bail early if container exited
             local state
             state=$(podman inspect --format '{{.State.Status}}' "$container_name" 2>/dev/null || echo "unknown")
             if [[ "$state" == "exited" || "$state" == "stopped" ]]; then
@@ -350,36 +383,6 @@ wait_for_health() {
         success "$label is up"
     }
 
-    wait_tcp() {
-        local label=$1 host=$2 port=$3 elapsed=0
-        info "Waiting for $label ..."
-        while ! podman exec postgres pg_isready -U postgres -q 2>/dev/null; do
-            # Bail early if container doesn't exist
-            if ! podman container exists postgres 2>/dev/null; then
-                error "$label container does not exist"
-                return 1
-            fi
-            # Bail early if container exited
-            local state
-            state=$(podman inspect --format '{{.State.Status}}' postgres 2>/dev/null || echo "unknown")
-            if [[ "$state" == "exited" || "$state" == "stopped" ]]; then
-                error "$label container exited unexpectedly (state=$state)"
-                podman logs --tail 20 postgres 2>&1 || true
-                return 1
-            fi
-            sleep 2
-            elapsed=$((elapsed + 2))
-            if [[ $elapsed -ge $timeout ]]; then
-                error "$label did not become healthy within ${timeout}s"
-                info "Container state: $state"
-                podman logs --tail 20 postgres 2>&1 || true
-                return 1
-            fi
-        done
-        success "$label is up"
-    }
-
-    wait_tcp "PostgreSQL" localhost 5432
     wait_http "ssl-proxy (HTTPS)" "https://localhost:${HTTPS_PORT}/health"
 }
 
@@ -396,15 +399,45 @@ main() {
     ensure_log_dir
     fix_mount_permissions
     create_network
-    build_images
+
+    if [[ "$SKIP_BUILD" == true ]]; then
+        info "Skipping image builds (--skip-build)"
+    else
+        build_images
+    fi
 
     start_postgres
-    start_auth
-    start_api_services
-    start_bff
-    start_frontend
-    start_ssl_proxy
+    wait_for_postgres
 
+    # All Spring Boot services can start concurrently (only need postgres)
+    local pids=()
+    start_auth & pids+=($!)
+    start_api_services & pids+=($!)
+
+    local failed=0
+    for pid in "${pids[@]}"; do
+        if ! wait "$pid"; then failed=$((failed + 1)); fi
+    done
+    if [[ $failed -gt 0 ]]; then
+        error "Spring Boot service startup failed"
+        return 1
+    fi
+
+    # BFF + frontend are independent of each other
+    pids=()
+    start_bff & pids+=($!)
+    start_frontend & pids+=($!)
+
+    failed=0
+    for pid in "${pids[@]}"; do
+        if ! wait "$pid"; then failed=$((failed + 1)); fi
+    done
+    if [[ $failed -gt 0 ]]; then
+        error "BFF/frontend startup failed"
+        return 1
+    fi
+
+    start_ssl_proxy
     wait_for_health
 
     echo ""
@@ -419,5 +452,10 @@ main() {
     echo "  ./scripts/test-connectivity.sh"
     echo "  ./scripts/local-stop.sh"
 }
+
+SKIP_BUILD=false
+for arg in "$@"; do
+    [[ "$arg" == "--skip-build" ]] && SKIP_BUILD=true
+done
 
 main "$@"
