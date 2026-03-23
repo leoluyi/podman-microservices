@@ -1,4 +1,5 @@
 ### Claude Code ###
+.claude/
 
 # Generated SSL certificates (local dev)
 certs/
