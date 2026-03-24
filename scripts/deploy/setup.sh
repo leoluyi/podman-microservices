@@ -89,10 +89,10 @@ fi
 info "複製配置檔..."
 
 # SSL Proxy 配置
-cp -r "configs/ssl-proxy/"* "/opt/app/configs/ssl-proxy/"
+cp -r "configs/shared/ssl-proxy/"* "/opt/app/configs/ssl-proxy/"
 
 # Frontend 配置
-cp "configs/frontend/nginx.conf" "/opt/app/configs/frontend/"
+cp "configs/shared/frontend/nginx.conf" "/opt/app/configs/frontend/"
 
 success "配置檔複製完成"
 
@@ -100,7 +100,7 @@ success "配置檔複製完成"
 # 5. 安裝 logrotate 設定
 # ============================================================================
 info "安裝 logrotate 設定..."
-sudo cp configs/logrotate.d/ssl-proxy /etc/logrotate.d/ssl-proxy
+sudo cp configs/shared/logrotate.d/ssl-proxy /etc/logrotate.d/ssl-proxy
 sudo chmod 644 /etc/logrotate.d/ssl-proxy
 success "logrotate 設定已安裝"
 
