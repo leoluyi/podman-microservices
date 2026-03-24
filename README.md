@@ -556,8 +556,8 @@ echo $TOKEN | cut -d. -f2 | base64 -d 2>/dev/null  # 解碼查看 payload
 1. 複製 Dockerfile：`services/api-user` → `services/api-newservice`
 2. 複製 Quadlet 配置：`quadlet/api-user@.container` → `quadlet/api-newservice@.container`
 3. 修改配置中的服務名稱（ContainerName、Label 等）
-4. 在 `configs/ha.conf` 加入 `API_NEWSERVICE_REPLICAS=2`
-5. 在 `configs/ssl-proxy/conf.d/upstream.conf` 加入新的 upstream 區塊
+4. 在 `configs/shared/ha.conf` 加入 `API_NEWSERVICE_REPLICAS=2`
+5. 在 `configs/shared/ssl-proxy/conf.d/upstream.conf` 加入新的 upstream 區塊
 6. 更新 BFF 配置以包含新服務
 7. 啟動新服務
 

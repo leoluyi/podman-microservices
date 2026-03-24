@@ -70,7 +70,7 @@ podman build -f services/ssl-proxy/Dockerfile \
 ```
 
 生成的 Secrets 會保存到：
-- `/opt/app/configs/ssl-proxy/partner-secrets.txt`
+- `/opt/app/configs/shared/ssl-proxy/partner-secrets.txt`
 
 #### 手動更換 Secrets
 
@@ -130,7 +130,7 @@ sudo firewall-cmd --reload
 systemctl --user enable ssl-proxy
 
 # Template unit 服務（各副本需個別 enable）
-# 副本數依 configs/ha.conf 設定，預設 2
+# 副本數依 configs/shared/ha.conf 設定，預設 2
 for svc in api-user api-order api-product bff frontend; do
     for i in 1 2; do
         systemctl --user enable "${svc}@${i}"
@@ -241,7 +241,7 @@ curl -k -H "Authorization: Bearer $TOKEN" \
    ```ini
    Environment=JWT_SECRET_PARTNER_D=dev-secret-partner-d-for-testing-32chars
    ```
-3. 編輯 `configs/ssl-proxy/lua/partners-loader.lua` 添加權限配置
+3. 編輯 `configs/shared/ssl-proxy/lua/partners-loader.lua` 添加權限配置
 4. 複製到 systemd 目錄並重啟：
    ```bash
    cp quadlet/ssl-proxy.container.d/environment.conf.example \
@@ -251,7 +251,7 @@ curl -k -H "Authorization: Bearer $TOKEN" \
 
 **生產環境**：
 
-1. 編輯 `configs/ssl-proxy/lua/partners-loader.lua` 添加權限配置
+1. 編輯 `configs/shared/ssl-proxy/lua/partners-loader.lua` 添加權限配置
 2. 更新 `quadlet/ssl-proxy.container` 添加 Secret 聲明：
    ```ini
    Secret=jwt-secret-partner-d,type=env,target=JWT_SECRET_PARTNER_D
@@ -322,7 +322,7 @@ podman build -f services/api-user/Dockerfile \
 ./scripts/scale-service.sh api-user 3
 
 # 注意：調整後需同步更新 upstream.conf 並 reload ssl-proxy
-# 1. 編輯 configs/ssl-proxy/conf.d/upstream.conf 加入 api-user-3:8080
+# 1. 編輯 configs/shared/ssl-proxy/conf.d/upstream.conf 加入 api-user-3:8080
 # 2. podman exec ssl-proxy nginx -s reload
 ```
 

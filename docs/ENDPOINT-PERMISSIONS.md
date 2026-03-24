@@ -11,7 +11,7 @@
 
 ## 配置格式
 
-在 `configs/ssl-proxy/lua/partners-loader.lua` 中：
+在 `configs/shared/ssl-proxy/lua/partners-loader.lua` 中：
 
 ```lua
 _M.partners = {
@@ -135,7 +135,7 @@ Partner 請求 URL 會自動提取路徑進行匹配：
 
 ### 1. 修改 partners-loader.lua
 
-編輯 `configs/ssl-proxy/lua/partners-loader.lua`，新增 Partner 配置。
+編輯 `configs/shared/ssl-proxy/lua/partners-loader.lua`，新增 Partner 配置。
 
 ### 2. 配置 Secret
 
@@ -154,7 +154,7 @@ Environment=JWT_SECRET_PARTNER_NEW=dev-secret-partner-new-for-testing-32chars
 ### 3. 重啟服務
 
 ```bash
-cp configs/ssl-proxy/lua/partners-loader.lua /opt/app/configs/ssl-proxy/lua/
+cp configs/shared/ssl-proxy/lua/partners-loader.lua /opt/app/configs/shared/ssl-proxy/lua/
 systemctl --user daemon-reload
 systemctl --user restart ssl-proxy
 ```

@@ -190,7 +190,7 @@ PublishPort=127.0.0.1:8101:8080
 ContainerName=api-payment-%i
 Network=internal-net:alias=api-payment
 
-# configs/ha.conf
+# configs/shared/ha.conf
 API_PAYMENT_REPLICAS=2
 ```
 
@@ -373,7 +373,7 @@ Backend 收到：GET /list
 
 純靜態檔案服務，HTTP only，不處理任何認證。SSL 終止由 SSL Proxy 負責。
 
-**路由行為（`configs/frontend/nginx.conf`）：**
+**路由行為（`configs/shared/frontend/nginx.conf`）：**
 
 | Location | 行為 |
 |----------|------|
@@ -530,7 +530,7 @@ SSL Proxy ──┼─ bff ──────┤
 | **Template Unit** | `api-user@.container` 透過 `%i` 產生 `api-user-1`、`api-user-2` 等 instance |
 | **DNS 別名** | `Network=internal-net:alias=api-user`，所有副本共用同一個 DNS 名稱，BFF 可直接透過 `http://api-user:8080` 存取 |
 | **OpenResty LB** | `upstream.conf` 使用 `least_conn` 策略 + 被動健康檢查（`max_fails=3 fail_timeout=30s`） |
-| **副本數設定** | `configs/ha.conf` 集中管理各服務副本數 |
+| **副本數設定** | `configs/shared/ha.conf` 集中管理各服務副本數 |
 | **Rolling Restart** | `restart-service.sh` 逐一重啟副本，確保服務不中斷 |
 
 **操作方式：**
@@ -564,8 +564,8 @@ Backend APIs (X)
 
 1. 建立 Dockerfile
 2. 建立 Quadlet 配置（`quadlet/api-xxx@.container`）
-3. 在 `configs/ha.conf` 設定副本數
-4. 在 `configs/ssl-proxy/conf.d/upstream.conf` 新增 upstream 區塊
+3. 在 `configs/shared/ha.conf` 設定副本數
+4. 在 `configs/shared/ssl-proxy/conf.d/upstream.conf` 新增 upstream 區塊
 5. 更新 SSL Proxy 路由（`routes.conf`）
 6. 更新 `scripts/lib.sh` 中的 `SCALABLE_SERVICES` 陣列
 7. 部署

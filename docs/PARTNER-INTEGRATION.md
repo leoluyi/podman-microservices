@@ -117,7 +117,7 @@
 
 ### 步驟 1：配置 Partner 權限
 
-編輯 `configs/ssl-proxy/lua/partners-loader.lua`：
+編輯 `configs/shared/ssl-proxy/lua/partners-loader.lua`：
 
 ```lua
 _M.partners = {
@@ -172,7 +172,7 @@ Secret=jwt-secret-partner-d,type=env,target=JWT_SECRET_PARTNER_D
 
 ```bash
 # 複製 Lua 配置
-cp configs/ssl-proxy/lua/partners-loader.lua /opt/app/configs/ssl-proxy/lua/
+cp configs/shared/ssl-proxy/lua/partners-loader.lua /opt/app/configs/shared/ssl-proxy/lua/
 
 # 開發環境：複製 env 檔
 cp quadlet/ssl-proxy.container.d/environment.conf.example \
@@ -204,7 +204,7 @@ systemctl --user restart ssl-proxy
 
 ### 修改權限
 
-編輯 `configs/ssl-proxy/lua/partners-loader.lua`，格式見 [ENDPOINT-PERMISSIONS.md](./ENDPOINT-PERMISSIONS.md)。
+編輯 `configs/shared/ssl-proxy/lua/partners-loader.lua`，格式見 [ENDPOINT-PERMISSIONS.md](./ENDPOINT-PERMISSIONS.md)。
 
 ### 停用 Partner
 

@@ -90,7 +90,7 @@ podman inspect ssl-proxy | grep -i jwt_secret
 echo $JWT_SECRET_PARTNER_A
 ```
 
-確認 Token payload 中的 `sub`（partner ID）與 `configs/ssl-proxy/lua/partners.json` 一致。
+確認 Token payload 中的 `sub`（partner ID）與 `configs/shared/ssl-proxy/lua/partners.json` 一致。
 
 ### 3. Partner API 返回 403
 
@@ -104,7 +104,7 @@ tail -20 /opt/app/logs/ssl-proxy/partner-access.log
 tail -50 /opt/app/logs/ssl-proxy/error.log | grep -i "partner\|permission\|403"
 ```
 
-確認 `configs/ssl-proxy/lua/partners.json` 中，該 partner 的 `allowed_endpoints` 包含被請求的路徑。
+確認 `configs/shared/ssl-proxy/lua/partners.json` 中，該 partner 的 `allowed_endpoints` 包含被請求的路徑。
 
 ### 4. Backend API 無法訪問
 
@@ -146,7 +146,7 @@ podman ps --filter "label=service=api-user" --format '{{.Names}}'
 # 預期輸出：api-user-1, api-user-2
 
 # 確認 upstream.conf
-cat configs/ssl-proxy/conf.d/upstream.conf | grep "api-user"
+cat configs/shared/ssl-proxy/conf.d/upstream.conf | grep "api-user"
 # 預期：server api-user-1:8080 ...
 #       server api-user-2:8080 ...
 
@@ -189,7 +189,7 @@ podman ps --filter "label=service=api-user"
 
 ```bash
 # 查看目前的副本設定
-cat configs/ha.conf
+cat configs/shared/ha.conf
 
 # 查看服務狀態摘要
 ./scripts/status.sh

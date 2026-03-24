@@ -21,7 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - 將 API 容器轉換為 template unit 命名（`api-user@.container`），支援多副本
 - 多副本負載均衡：Template Unit + OpenResty `least_conn` upstream
-- `configs/ha.conf` 集中管理各服務副本數
+- `configs/shared/ha.conf` 集中管理各服務副本數
 - `scripts/scale-service.sh` 動態調整副本數
 - `scripts/restart-service.sh` 支援 rolling restart（零中斷）
 - `scripts/logs.sh` 支援多副本日誌查看
