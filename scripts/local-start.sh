@@ -171,13 +171,13 @@ fix_mount_permissions() {
     # Config files mounted into Spring Boot services
     find "$PROJECT_ROOT/services"/*/config -name "*.yml" -exec chmod a+r {} + 2>/dev/null || true
     # PostgreSQL init script (needs read + execute)
-    chmod a+rx "$PROJECT_ROOT/configs/postgres/init-db.sh" 2>/dev/null || true
+    chmod a+rx "$PROJECT_ROOT/configs/shared/postgres/init-db.sh" 2>/dev/null || true
     # Frontend nginx config
     chmod a+r "$PROJECT_ROOT/services/frontend/nginx.conf" 2>/dev/null || true
     # SSL certs (key needs read for nginx inside container)
     chmod a+r "$CERT_DIR/server.crt" "$CERT_DIR/server.key" 2>/dev/null || true
     # SSL proxy configs
-    chmod -R a+rX "$PROJECT_ROOT/configs/ssl-proxy" 2>/dev/null || true
+    chmod -R a+rX "$PROJECT_ROOT/configs/shared/ssl-proxy" 2>/dev/null || true
     success "Mount permissions fixed"
 }
 
@@ -236,7 +236,7 @@ start_postgres() {
         --label "$LABEL" \
         -e POSTGRES_PASSWORD="$(cat "$PROJECT_ROOT/secrets/postgres-password")" \
         -e APP_USER_PASSWORD="$(cat "$PROJECT_ROOT/secrets/db-password")" \
-        -v "$PROJECT_ROOT/configs/postgres/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro" \
+        -v "$PROJECT_ROOT/configs/shared/postgres/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro" \
         -v "pgdata:/var/lib/postgresql/data" \
         "$POSTGRES_IMAGE"
     success "$name started"
@@ -298,8 +298,8 @@ start_ssl_proxy() {
             -p "${HTTP_PORT}:80" \
             -v "$CERT_DIR/server.crt:/etc/nginx/ssl/server.crt:ro" \
             -v "$CERT_DIR/server.key:/etc/nginx/ssl/server.key:ro" \
-            -v "$PROJECT_ROOT/configs/ssl-proxy/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro" \
-            -v "$PROJECT_ROOT/configs/ssl-proxy/conf.d:/etc/nginx/conf.d:ro" \
+            -v "$PROJECT_ROOT/configs/shared/ssl-proxy/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro" \
+            -v "$PROJECT_ROOT/configs/shared/ssl-proxy/conf.d:/etc/nginx/conf.d:ro" \
             -v "$LOG_DIR:/var/log/nginx:rw" \
             -e JWT_SECRET_PARTNER_A="dev-secret-partner-a-for-testing-only-32chars" \
             -e JWT_SECRET_PARTNER_B="dev-secret-partner-b-for-testing-only-32chars" \
