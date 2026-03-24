@@ -12,8 +12,8 @@ set -euo pipefail
 
 source "$(dirname "$0")/lib.sh"
 
-# shellcheck source=../configs/images.env
-source "$PROJECT_ROOT/configs/images.env"
+# shellcheck source=../configs/dev/images.env
+source "$PROJECT_ROOT/configs/dev/images.env"
 
 NETWORK="internal-net"
 CERT_DIR="$PROJECT_ROOT/certs"
