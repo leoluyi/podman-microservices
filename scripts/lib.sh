@@ -22,7 +22,7 @@ error()   { echo -e "${RED}[ERROR]${NC} $1"; }
 # ─── Paths ───────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-HA_CONF="$PROJECT_ROOT/configs/ha.conf"
+HA_CONF="$PROJECT_ROOT/configs/shared/ha.conf"
 
 # ─── Service lists ───────────────────────────────────────────────────────────
 SCALABLE_SERVICES=("api-user" "api-order" "api-product" "api-auth" "bff" "frontend")
