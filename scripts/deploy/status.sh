@@ -34,7 +34,7 @@ echo "=========================================="
 echo ""
 
 # 副本配置摘要
-echo "副本配置（configs/ha.conf）："
+echo "副本配置（configs/shared/ha.conf）："
 for service in "${SCALABLE_SERVICES[@]}"; do
     replicas=$(get_replicas "$service")
     echo "  $service: ${replicas} 副本"

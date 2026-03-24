@@ -6,8 +6,8 @@
 #   ./scripts/scale-service.sh api-user 3    # 將 api-user 擴展到 3 副本
 #   ./scripts/scale-service.sh bff 1         # 將 bff 縮減到 1 副本
 #
-# 注意：此腳本會自動更新 configs/ha.conf，但不會更新 upstream.conf
-#       調整副本後，請同步修改 configs/ssl-proxy/conf.d/upstream.conf
+# 注意：此腳本會自動更新 configs/shared/ha.conf，但不會更新 upstream.conf
+#       調整副本後，請同步修改 configs/shared/ssl-proxy/conf.d/upstream.conf
 #       並重新載入 ssl-proxy：
 #         podman exec ssl-proxy nginx -s reload
 
@@ -85,7 +85,7 @@ echo ""
 success "$SERVICE 已調整為 ${TARGET} 副本"
 echo ""
 warning "請記得同步更新 upstream.conf 並重新載入 ssl-proxy："
-echo "  1. 編輯 configs/ssl-proxy/conf.d/upstream.conf"
+echo "  1. 編輯 configs/shared/ssl-proxy/conf.d/upstream.conf"
 echo "  2. podman exec ssl-proxy nginx -s reload"
 
 exit 0
