@@ -15,6 +15,14 @@ source "$(dirname "$0")/lib.sh"
 # shellcheck source=../configs/dev/images.env
 source "$PROJECT_ROOT/configs/dev/images.env"
 
+# shellcheck source=../configs/dev/secrets.env
+if [ -f "$PROJECT_ROOT/configs/dev/secrets.env" ]; then
+    source "$PROJECT_ROOT/configs/dev/secrets.env"
+else
+    error "Missing configs/dev/secrets.env — copy from secrets.env.example"
+    exit 1
+fi
+
 NETWORK="internal-net"
 CERT_DIR="$PROJECT_ROOT/certs"
 LOG_DIR="$PROJECT_ROOT/logs/ssl-proxy"
@@ -301,10 +309,10 @@ start_ssl_proxy() {
             -v "$PROJECT_ROOT/configs/shared/ssl-proxy/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro" \
             -v "$PROJECT_ROOT/configs/shared/ssl-proxy/conf.d:/etc/nginx/conf.d:ro" \
             -v "$LOG_DIR:/var/log/nginx:rw" \
-            -e JWT_SECRET_PARTNER_A="dev-secret-partner-a-for-testing-only-32chars" \
-            -e JWT_SECRET_PARTNER_B="dev-secret-partner-b-for-testing-only-32chars" \
-            -e JWT_SECRET_PARTNER_C="dev-secret-partner-c-for-testing-only-32chars" \
-            -e DEBUG_PARTNERS=true \
+            -e JWT_SECRET_PARTNER_A="${JWT_SECRET_PARTNER_A}" \
+            -e JWT_SECRET_PARTNER_B="${JWT_SECRET_PARTNER_B}" \
+            -e JWT_SECRET_PARTNER_C="${JWT_SECRET_PARTNER_C}" \
+            -e DEBUG_PARTNERS="${DEBUG_PARTNERS:-true}" \
             "$SSL_PROXY_IMAGE"
 
         sleep 1
