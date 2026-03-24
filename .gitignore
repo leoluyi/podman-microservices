@@ -165,6 +165,7 @@ build/
 
 # Secrets
 secrets/
+configs/dev/secrets.env
 
 # Java
 services/*/target/
