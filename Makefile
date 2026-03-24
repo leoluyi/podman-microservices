@@ -90,7 +90,6 @@ bundle:
 		scripts/deploy/ \
 		scripts/lib.sh \
 		scripts/manage-partner-secrets.sh \
-		scripts/generate-certs.sh \
 		scripts/generate-jwt.sh \
 		services/api-user/config/application-prod.yml \
 		services/api-order/config/application-prod.yml \
